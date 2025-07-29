@@ -2,7 +2,6 @@
 // Created by 20852 on 25-7-22.
 //
 #include "mainwindow.h"
-#include "sockethandler.h"
 #include <qboxlayout> // 用于布局
 #include <QHostAddress> // 用于 QTcpSocket
 #include <QJsonDocument> // 用于 JSON 处理

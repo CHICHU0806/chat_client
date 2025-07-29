@@ -6,7 +6,6 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
-#include "sockethandler.h" // **新增：包含 SocketHandler 头文件**
 #include <QWidget>
 #include <QLabel>      // 欢迎标签
 #include <QTextEdit>   // **新增：用于显示聊天记录**
@@ -22,7 +21,7 @@
 #include <QListWidget>  // **新增：用于显示在线用户列表**
 #include <QSplitter>
 
-class MainWindow : public QWidget , public SocketHandler{
+class MainWindow : public QWidget {
     Q_OBJECT // 启用 Qt 的元对象系统
 
 public:

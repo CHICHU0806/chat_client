@@ -5,7 +5,6 @@
 #ifndef LOGIN_IN_H
 #define LOGIN_IN_H
 
-#include "sockethandler.h"
 #include <QWidget>     // LoginWindow 继承自 QWidget
 #include <QLabel>      // 成员变量类型：QLabel*
 #include <QLineEdit>   // 成员变量类型：QLineEdit*
@@ -21,7 +20,7 @@
 
 #include "registerwindow.h"
 
-class LoginWindow : public QWidget,public SocketHandler {
+class LoginWindow : public QWidget {
     Q_OBJECT // 启用 Qt 的元对象系统（信号与槽等）
 
 public:
@@ -30,9 +29,6 @@ public:
 
     signals:
     void registerWindowClosed();
-
-protected:
-    void processResponse(const QJsonObject &response) override;
 
 private slots:
     void onLoginButtonClicked(); // 响应登录按钮点击的槽函数
@@ -58,6 +54,7 @@ private:
     quint32 m_blockSize;
 
     void connectToServer(); // **新增：连接服务器的辅助函数**
+    void processResponse(const QJsonObject& response); // **新增：处理服务器响应的辅助函数**
 };
 
 #endif // LOGIN_IN_H
