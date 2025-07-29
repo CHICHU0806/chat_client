@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.31)
-project(chat-client)
+project(chat_client)
 
 set(Qt6_DIR "C:/Qt/6.9.1/mingw_64/lib/cmake/Qt6")  # 注意斜杠方向
 list(APPEND CMAKE_PREFIX_PATH "C:/Qt/6.9.1/mingw_64")
@@ -17,7 +17,7 @@ find_package(Qt6 COMPONENTS
         Sql
         REQUIRED)
 
-add_executable(chat-client main.cpp
+add_executable(chat_client main.cpp
         Src/login_in.cpp
         Inc/login_in.h
         resource.qrc
@@ -30,7 +30,7 @@ add_executable(chat-client main.cpp
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Inc
 )
-target_link_libraries(chat-client
+target_link_libraries(chat_client
         Qt6::Core
         Qt6::Gui
         Qt6::Widgets
