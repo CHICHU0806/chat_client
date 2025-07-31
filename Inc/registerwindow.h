@@ -28,6 +28,7 @@ public:
 
 private slots:
     void onConfirmButtonClicked(); // 响应注册按钮点击的槽函数
+    void handleRegisterResponse(const QJsonObject& response); // 处理注册响应的槽函数
 
 protected:
     void closeEvent(QCloseEvent *event) override;// 重写 closeEvent 方法，在窗口关闭事件发生时发出信号
@@ -41,14 +42,7 @@ protected:
 
 private:
     QTcpSocket *mainTcpSocket;
-
-    const QString SERVER_IP = "127.0.0.1";
-    const quint16 SERVER_PORT = 12345;
-
     quint32     m_blockSize; // **新增：用于存储当前数据包的预期总长度**
-
-    // 辅助函数：用于发送注册请求
-    void sendRegistrationRequest(const QString &username, const QString &password);
 };
 
 #endif //REGISTERWINDOW_H

@@ -9,6 +9,7 @@
 
 NetworkManager* NetworkManager::_instance = nullptr;
 
+//单例模式设计
 NetworkManager* NetworkManager::instance() {
     if (!_instance) {
         _instance = new NetworkManager();
@@ -16,6 +17,7 @@ NetworkManager* NetworkManager::instance() {
     return _instance;
 }
 
+//构造函数实现
 NetworkManager::NetworkManager(QObject* parent)
     : QObject(parent),
       mainTcpSocket(new QTcpSocket(this)),
@@ -25,7 +27,6 @@ NetworkManager::NetworkManager(QObject* parent)
     connect(mainTcpSocket, &QTcpSocket::readyRead, this, [this]() {
         QDataStream in(mainTcpSocket);
         in.setVersion(QDataStream::Qt_6_0);
-
         for (;;) {
             if (m_blockSize == 0) {
                 if (mainTcpSocket->bytesAvailable() < sizeof(quint32)) {

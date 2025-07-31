@@ -100,11 +100,7 @@ LoginWindow::LoginWindow(QWidget *parent)
 
     // 连接 NetworkManager 的信号
     auto* network = NetworkManager::instance();
-    connect(network, &NetworkManager::loginResponse,
-            this, &LoginWindow::handleLoginResponse);
-    connect(network, &NetworkManager::registerResponse,
-            this, &LoginWindow::handleRegisterResponse);
-
+    connect(network, &NetworkManager::loginResponse,this, &LoginWindow::handleLoginResponse);
     qDebug() << "LoginWindow initialized.";
 }
 

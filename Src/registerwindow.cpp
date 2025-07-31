@@ -2,6 +2,7 @@
 // Created by 20852 on 25-7-22.
 //
 #include "registerwindow.h"
+#include "networkmanager.h" // 引入网络管理器头文件
 #include <qdialog.h>
 #include <qboxlayout>   // 布局管理器
 #include <QMessageBox>   // 用于弹出消息框
@@ -19,6 +20,7 @@ RegisterWindow::RegisterWindow(QTcpSocket *socket, QWidget *parent)
 
     setWindowFlags(Qt::Window | Qt::WindowCloseButtonHint); // 隐藏图标和最大化/最小化按钮，保留关闭按钮
 
+    auto* network = NetworkManager::instance();
     // --- 1. 创建并设置主布局 ---
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
@@ -78,7 +80,7 @@ RegisterWindow::RegisterWindow(QTcpSocket *socket, QWidget *parent)
 
     //连接信号与槽
     connect(confirmButton, &QPushButton::clicked, this, &RegisterWindow::onConfirmButtonClicked);
-
+    connect(network, &NetworkManager::registerResponse,this, &RegisterWindow::handleRegisterResponse);
     m_blockSize = 0;
 }
 
@@ -107,38 +109,30 @@ void RegisterWindow::onConfirmButtonClicked() {
         return;
     }
 
-    // 确保 socket 已连接才能发送数据
-    if (mainTcpSocket->state() == QAbstractSocket::ConnectedState) {
-        sendRegistrationRequest(account, password);
-    } else {
-        QMessageBox::critical(this, "网络错误", "未连接到服务器，无法注册！");
-        qWarning() << "RegisterWindow 无法发送注册请求：Socket 未连接。";
-    }
-}
-
-// 辅助函数：发送注册请求到服务器
-void RegisterWindow::sendRegistrationRequest(const QString &account, const QString &password) {
+    // 使用 NetworkManager 发送注册请求
     QJsonObject request;
-    request["type"] = "register"; // 请求类型：注册
+    request["type"] = "register";
     request["account"] = account;
     request["password"] = password;
 
-    QByteArray jsonData = QJsonDocument(request).toJson(QJsonDocument::Compact);
+    NetworkManager::instance()->sendMessage(request);
 
-    // 准备数据包：长度前缀 + JSON 数据
-    QByteArray dataBlock;
-    QDataStream out(&dataBlock, QIODevice::WriteOnly);
-    out.setVersion(QDataStream::Qt_6_0); // 确保与服务器端版本一致
-    out << (quint32) 0; // 预留总长度位置
-    out << jsonData; // 写入实际 JSON 数据
+    // 禁用按钮防止重复提交
+    confirmButton->setEnabled(false);
+}
 
-    // 回到数据块开始，写入总长度
-    out.device()->seek(0);
-    out << (quint32) (dataBlock.size() - sizeof(quint32));
+// 处理注册响应的槽函数
+void RegisterWindow::handleRegisterResponse(const QJsonObject& response) {
+    QString status = response["status"].toString();
+    QString message = response["message"].toString();
 
-    // 发送数据
-    mainTcpSocket->write(dataBlock);
-    mainTcpSocket->flush(); // 强制发送缓冲数据
+    if (status == "success") {
+        QMessageBox::information(this, "注册成功", message);
+        this->close();
+    } else {
+        QMessageBox::warning(this, "注册失败", message);
+    }
 
-    qInfo() << "已发送注册请求：用户 " << account;
+    // 重新启用按钮
+    confirmButton->setEnabled(true);
 }
