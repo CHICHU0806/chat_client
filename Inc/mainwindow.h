@@ -15,6 +15,8 @@
 #include <QJsonObject>   // **新增：用于处理 JSON 消息**
 #include <QCloseEvent>   // **新增：用于处理窗口关闭事件**
 #include <QListWidget>  // **新增：用于显示在线用户列表**
+#include <QSplitter>
+#include <QMessageBox>
 
 class MainWindow : public QWidget {
     Q_OBJECT // 启用 Qt 的元对象系统

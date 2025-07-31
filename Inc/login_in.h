@@ -34,10 +34,7 @@ private slots:
     void onLoginButtonClicked(); // 响应登录按钮点击的槽函数
     void onRegisterButtonClicked(); // 响应注册按钮点击的槽函数
     void handleRegisterWindowClosed(); //关闭注册后返回登录界面的槽函数
-    void onConnected();             // 连接成功
-    void onDisconnected();          // 断开连接
-    void onSocketReadyRead();             // **新增：当有新数据可读时触发**
-    void onSocketErrorOccurred(QTcpSocket::SocketError socketError); // 发生错误
+    void handleLoginResponse(const QJsonObject& response); // 处理登录响应的槽函数
 
 private:
     // 定义窗口中将使用的 GUI 控件的成员变量
@@ -47,14 +44,6 @@ private:
     QLineEdit *passwordLineEdit;
     QPushButton *loginButton;
     QPushButton *registerButton;
-
-    // **新增：QTcpSocket 实例**
-    QTcpSocket *mainTcpSocket;    // 用于与服务器通信的 TCP 套接字
-    // **新增：客户端数据包长度，用于分包接收**
-    quint32 m_blockSize;
-
-    void connectToServer(); // **新增：连接服务器的辅助函数**
-    void processResponse(const QJsonObject& response); // **新增：处理服务器响应的辅助函数**
 };
 
 #endif // LOGIN_IN_H
