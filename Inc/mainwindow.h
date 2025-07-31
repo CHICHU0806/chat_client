@@ -12,14 +12,9 @@
 #include <QLineEdit>   // **新增：用于输入消息**
 #include <QPushButton> // **新增：用于发送消息按钮**
 #include <QTcpSocket>  // **新增：QTcpSocket，用于共享连接**
-#include <QJsonDocument> // **新增：用于处理 JSON 消息**
 #include <QJsonObject>   // **新增：用于处理 JSON 消息**
-#include <QDataStream>   // **新增：用于数据包分帧**
-#include <QMessageBox>   // **新增：用于显示错误信息**
 #include <QCloseEvent>   // **新增：用于处理窗口关闭事件**
-#include <QDebug>        // **新增：用于调试输出**
 #include <QListWidget>  // **新增：用于显示在线用户列表**
-#include <QSplitter>
 
 class MainWindow : public QWidget {
     Q_OBJECT // 启用 Qt 的元对象系统

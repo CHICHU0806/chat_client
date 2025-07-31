@@ -211,8 +211,6 @@ void LoginWindow::handleRegisterWindowClosed()
 //-连接成功
 void LoginWindow::onConnected() {
     qInfo() << "成功连接到服务器！";
-    // 可以在这里更新 UI 状态，例如提示用户已连接
-    // 但不要在这里就显示主窗口，主窗口应该在登录成功响应后才显示
     loginButton->setText("登录"); // 连接成功后，登录按钮应该显示“登录”，并可用
     loginButton->setEnabled(true);
     // accountLineEdit 和 passwordLineEdit 保持可用，等待用户输入登录信息
@@ -312,7 +310,6 @@ void LoginWindow::processResponse(const QJsonObject& response) {
             QMessageBox::warning(this, "注册失败", message);
         }
     }
-    // TODO: 将来这里可以添加对 "login" 响应的处理逻辑
     else if (responseType == "login") {
         if (status == "success") {
             QMessageBox::information(this, "登录成功", message);
