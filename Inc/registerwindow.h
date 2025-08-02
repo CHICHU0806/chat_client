@@ -34,6 +34,8 @@ protected:
     void closeEvent(QCloseEvent *event) override;// 重写 closeEvent 方法，在窗口关闭事件发生时发出信号
 
     // 定义窗口中将使用的 GUI 控件的成员变量
+    QLabel *usernameLabel;
+    QLineEdit *usernameLineEdit;
     QLabel *accountLabel;
     QLineEdit *accountLineEdit;
     QLabel *passwordLabel;

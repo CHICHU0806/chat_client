@@ -184,7 +184,6 @@ void LoginWindow::handleLoginResponse(const QJsonObject& response) {
     QString message = response["message"].toString();
 
     if (status == "success") {
-        QMessageBox::information(this, "登录成功", message);
         this->hide();
         MainWindow *mainWindow = new MainWindow(NetworkManager::instance()->getSocket());
         mainWindow->show();

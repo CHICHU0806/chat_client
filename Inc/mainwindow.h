@@ -12,6 +12,7 @@
 #include <QLineEdit>   // **新增：用于输入消息**
 #include <QPushButton> // **新增：用于发送消息按钮**
 #include <QTcpSocket>  // **新增：QTcpSocket，用于共享连接**
+#include <QJsonDocument> // **新增：用于处理 JSON 消息**
 #include <QJsonObject>   // **新增：用于处理 JSON 消息**
 #include <QCloseEvent>   // **新增：用于处理窗口关闭事件**
 #include <QListWidget>  // **新增：用于显示在线用户列表**
@@ -31,10 +32,9 @@ protected:
     void closeEvent(QCloseEvent *event) override;
 
 private slots:
-    // **新增：QTcpSocket 相关的槽函数**
-    void onSocketReadyRead();             // 当有新数据可读时触发（接收聊天消息）
-    void onSocketDisconnected();          // 当服务器断开连接时触发
-    void onSocketErrorOccurred(QAbstractSocket::SocketError socketError); // 当套接字发生错误时触发
+    // NetworkManager 相关的槽函数
+    // void handleChatMessage(const QJsonObject& message);
+    // void handleUserListUpdate(const QJsonObject& response);
 
     // **新增：聊天界面按钮的槽函数**
     void onSendButtonClicked(); // 发送消息按钮点击时触发
@@ -45,16 +45,17 @@ private:
     QPushButton *sendButton;   // 发送按钮
 
     QListWidget *userListWidget;
+
     // **新增：共享 QTcpSocket 成员变量**
     QTcpSocket *mainTcpSocket;
 
-    // **新增：用于数据包分帧的变量**
-    quint32 m_blockSize;
+    // 当前登录用户名
+    QString currentUsername;
 
-    // **新增：辅助函数，用于处理接收到的 JSON 消息**
-    void processIncomingMessage(const QJsonObject& message);
-    // **新增：辅助函数，用于将消息发送到服务器**
-    void sendMessageToServer(const QString &msg);
+    // 辅助函数
+    // void updateUserList(const QJsonArray& users);
+     void sendMessageToServer(const QString &msg);
+    // void requestUserList(); // 请求用户列表
 };
 
 #endif // MAINWINDOW_H

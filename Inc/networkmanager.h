@@ -16,7 +16,7 @@ public:
     QTcpSocket* getSocket() { return mainTcpSocket; }
 
     signals:
-        void registerResponse(const QJsonObject& response);
+    void registerResponse(const QJsonObject& response);
     void loginResponse(const QJsonObject& response);
     void chatMessageReceived(const QJsonObject& message);
 

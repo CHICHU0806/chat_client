@@ -2,6 +2,7 @@
 // Created by 20852 on 25-7-22.
 //
 #include "mainwindow.h"
+#include "networkmanager.h"
 #include <qboxlayout> // 用于布局
 #include <QHostAddress> // 用于 QTcpSocket
 #include <QJsonDocument> // 用于 JSON 处理
@@ -11,8 +12,7 @@
 // 构造函数
 MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     : QWidget(parent),
-      mainTcpSocket(socket), // **将传入的共享 socket 赋值给成员变量**
-      m_blockSize(0)       // 初始化数据包大小为0
+      mainTcpSocket(socket) // **将传入的共享 socket 赋值给成员变量**
 {
     setWindowTitle(" "); // 设置窗口标题
     setMinimumSize(1000, 750);        // 设置窗口最小大小
@@ -154,13 +154,6 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     // 允许按 Enter 键发送消息
     connect(messageInput, &QLineEdit::returnPressed, this, &MainWindow::onSendButtonClicked);
 
-
-    // **连接共享 QTcpSocket 的信号到 MainWindow 的槽函数**
-    // 注意：这里的 socket 已经由 LoginWindow 连接成功并传递过来
-    connect(mainTcpSocket, &QTcpSocket::readyRead, this, &MainWindow::onSocketReadyRead);
-    connect(mainTcpSocket, &QTcpSocket::disconnected, this, &MainWindow::onSocketDisconnected);
-    connect(mainTcpSocket, &QTcpSocket::errorOccurred, this, &MainWindow::onSocketErrorOccurred);
-
     qDebug() << "MainWindow initialized with shared socket.";
 }
 
@@ -180,64 +173,6 @@ void MainWindow::closeEvent(QCloseEvent *event) {
         qInfo() << "MainWindow closed, socket disconnected.";
     }
     QWidget::closeEvent(event); // 调用基类的 closeEvent，确保窗口正常关闭
-}
-
-// **槽函数：接收服务器数据**
-void MainWindow::onSocketReadyRead() {
-    QDataStream in(mainTcpSocket);
-    in.setVersion(QDataStream::Qt_6_0); // 确保与服务器端版本一致
-
-    for (;;) {
-        if (m_blockSize == 0) {
-            if (mainTcpSocket->bytesAvailable() < (qint64)sizeof(quint32)) {
-                return; // 数据不足以读取完整的包大小，等待更多数据
-            }
-            in >> m_blockSize; // 读取数据包的总大小
-            qDebug() << "DEBUG (MainWindow): 读取到数据包的预期总长度 (m_blockSize):" << m_blockSize;
-        }
-
-        if (mainTcpSocket->bytesAvailable() < m_blockSize) {
-            return; // 数据不足以读取完整的 JSON 数据，等待更多数据
-        }
-
-        QByteArray jsonData;
-        in >> jsonData; // 读取实际的 JSON 数据
-
-        qDebug() << "DEBUG (MainWindow): QDataStream 成功读取到 JSON 数据块。大小:" << jsonData.size();
-        qDebug() << "DEBUG (MainWindow): 原始 JSON 数据 (UTF8):" << QString::fromUtf8(jsonData);
-
-        QJsonDocument doc = QJsonDocument::fromJson(jsonData);
-        if (doc.isNull() || !doc.isObject()) {
-            qWarning() << "MainWindow 无法解析传入的 JSON 数据。原始数据 (Hex):" << jsonData.toHex();
-            m_blockSize = 0; // 重置 m_blockSize，准备接收下一个包
-            break; // 跳出循环，等待下一个包
-        }
-
-        QJsonObject message = doc.object();
-        qInfo() << "MainWindow 收到服务器消息：" << message;
-
-        // 调用辅助函数处理解析后的消息
-        processIncomingMessage(message);
-
-        m_blockSize = 0; // 处理完一个完整的数据包后，重置 m_blockSize，准备接收下一个包
-    }
-}
-
-// **槽函数：处理服务器断开连接**
-void MainWindow::onSocketDisconnected() {
-    qWarning() << "已从服务器断开连接！聊天功能已禁用。";
-    chatDisplay->append("<font color='red'>--- 与服务器断开连接 ---</font>");
-    messageInput->setEnabled(false); // 禁用输入框
-    sendButton->setEnabled(false);   // 禁用发送按钮
-    m_blockSize = 0; // 断开连接后重置数据包大小
-}
-
-// **槽函数：处理网络错误**
-void MainWindow::onSocketErrorOccurred(QAbstractSocket::SocketError socketError) {
-    Q_UNUSED(socketError); // 避免编译器警告
-    qCritical() << "套接字错误 (MainWindow)：" << mainTcpSocket->errorString();
-    QMessageBox::critical(this, "网络错误", "与服务器连接时发生错误：" + mainTcpSocket->errorString());
-    onSocketDisconnected(); // 发生错误通常也意味着连接不可用
 }
 
 // **槽函数：发送消息按钮点击时触发**
@@ -265,26 +200,6 @@ void MainWindow::onSendButtonClicked() {
     }
 }
 
-// **辅助函数：处理接收到的 JSON 消息并显示**
-void MainWindow::processIncomingMessage(const QJsonObject& message) {
-    QString messageType = message["type"].toString();
-
-    if (messageType == "chatMessage") {
-        QString sender = message["sender"].toString();
-        QString content = message["content"].toString();
-        QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss"); // 获取当前时间作为消息时间
-
-        // 将消息显示到聊天区域
-        chatDisplay->append(QString("[%1] <b>%2:</b> %3")
-                             .arg(timestamp)
-                             .arg(sender)
-                             .arg(content));
-    } else {
-        qWarning() << "MainWindow 收到未知消息类型：" << messageType;
-    }
-}
-
-// **辅助函数：将消息发送到服务器**
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
 void MainWindow::sendMessageToServer(const QString &msg) {
     QJsonObject request;

@@ -21,14 +21,30 @@ RegisterWindow::RegisterWindow(QTcpSocket *socket, QWidget *parent)
     setWindowFlags(Qt::Window | Qt::WindowCloseButtonHint); // 隐藏图标和最大化/最小化按钮，保留关闭按钮
 
     auto* network = NetworkManager::instance();
-    // --- 1. 创建并设置主布局 ---
+    //  创建并设置主布局
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
 
     mainLayout->addStretch();
 
+    // --- 1. 创建用户名输入行 ---
+    QHBoxLayout *usernameLayout = new QHBoxLayout();
+    usernameLabel = new QLabel("用户名:", this);
+    usernameLineEdit = new QLineEdit(this);
+    usernameLineEdit->setPlaceholderText("请输入用户名");
+    usernameLineEdit->setStyleSheet("QLineEdit { "
+        "border-radius: 10px; "
+        "padding: 5px; border: "
+        "1px solid gray; "
+        "}");
+    usernameLayout->addWidget(usernameLabel);
+    usernameLayout->addWidget(usernameLineEdit);
+    mainLayout->addLayout(usernameLayout);
+
+    mainLayout->addSpacing(15);
+
     // --- 2. 创建账号输入行 ---
     QHBoxLayout *accountLayout = new QHBoxLayout();
-    accountLabel = new QLabel("账号:", this);
+    accountLabel = new QLabel("账   号:", this);
     accountLineEdit = new QLineEdit(this);
     accountLineEdit->setPlaceholderText("请输入账号");
     accountLineEdit->setStyleSheet("QLineEdit { "
@@ -44,7 +60,7 @@ RegisterWindow::RegisterWindow(QTcpSocket *socket, QWidget *parent)
 
     // --- 3. 创建密码输入行 ---
     QHBoxLayout *passwordLayout = new QHBoxLayout();
-    passwordLabel = new QLabel("密码:", this);
+    passwordLabel = new QLabel("密   码:", this);
     passwordLineEdit = new QLineEdit(this);
     passwordLineEdit->setPlaceholderText("请输入密码");
     passwordLineEdit->setEchoMode(QLineEdit::Password);
@@ -100,6 +116,7 @@ void RegisterWindow::closeEvent(QCloseEvent *event) {
 
 // **主要逻辑修改：连接服务器并发送注册数据**
 void RegisterWindow::onConfirmButtonClicked() {
+    QString username = usernameLineEdit->text();
     QString account = accountLineEdit->text();
     QString password = passwordLineEdit->text();
 
@@ -112,6 +129,7 @@ void RegisterWindow::onConfirmButtonClicked() {
     // 使用 NetworkManager 发送注册请求
     QJsonObject request;
     request["type"] = "register";
+    request["username"] = username;
     request["account"] = account;
     request["password"] = password;
 
