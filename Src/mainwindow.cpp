@@ -17,6 +17,7 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
 {
     setWindowTitle(" "); // 设置窗口标题
     setMinimumSize(1000, 750);        // 设置窗口最小大小
+    setStyleSheet("MainWindow { background-color: #6690A0; }");
 
     // 创建主布局
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
@@ -98,7 +99,7 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     chatDisplay->setStyleSheet(
         "QTextEdit {"
         "    border: none;"
-        "    background-color: white;"
+        "    background-color: #6690A0;"
         "}"
     );
 
@@ -263,15 +264,6 @@ void MainWindow::initializeUserList() {
 
     userListWidget->addItem(publicItem);
 
-    // 添加分隔线样式的文本项
-    QListWidgetItem* separator = new QListWidgetItem("────── 在线用户 ──────");
-    separator->setFlags(Qt::NoItemFlags); // 不可选中
-    separator->setTextAlignment(Qt::AlignCenter);
-    // 给分隔线设置特殊样式
-    QFont separatorFont;
-    separatorFont.setPointSize(9);
-    separator->setFont(separatorFont);
-    separator->setForeground(QColor(128, 128, 128));
     // 设置默认选中公共聊天室
     userListWidget->setCurrentItem(publicItem);
 
