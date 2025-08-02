@@ -28,7 +28,7 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     topBar->setFixedHeight(50);  // 固定高度
     topBar->setStyleSheet(
         "QWidget {"
-        "    background-color: #009688;"  // 深色背景
+        "    background-color: #6690A0;"  // 深色背景
         "    border-bottom: 1px solid #1E1E1E;"  // 底部边框
         "}"
     );
@@ -49,7 +49,7 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
         "    padding: 5px 15px;"
         "}"
         "QPushButton:hover {"
-        "    background-color: #00796B;"
+        "    background-color: #607D8B;"
         "    border-radius: 4px;"  // hover 状态也需要添加圆角
         "}"
     );
@@ -71,6 +71,8 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
 
     // 1. 左侧用户列表区域
     QWidget *leftWidget = new QWidget(this);
+    leftWidget->setMinimumWidth(180);  // 添加这行：设置最小宽度
+    leftWidget->setMaximumWidth(350);  // 添加这行：设置最大宽度
     QVBoxLayout *leftLayout = new QVBoxLayout(leftWidget);
     leftLayout->setContentsMargins(0, 0, 0, 0);
 
@@ -86,6 +88,7 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
 
     // 2. 中间聊天区域
     QWidget *centerWidget = new QWidget(this);
+    centerWidget->setMinimumWidth(400);  // 添加这行：设置聊天区域最小宽度
     QVBoxLayout *centerLayout = new QVBoxLayout(centerWidget);
     centerLayout->setContentsMargins(0, 0, 0, 0);
     centerLayout->setSpacing(0);
@@ -141,9 +144,15 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     mainSplitter->addWidget(leftWidget);
     mainSplitter->addWidget(centerWidget);
 
+    // ← 在这里添加分割器约束设置
+    mainSplitter->setCollapsible(0, false);
+    mainSplitter->setCollapsible(1, false);
+    mainSplitter->setStretchFactor(0, 0);
+    mainSplitter->setStretchFactor(1, 1);
+
     // 设置初始大小比例
     QList<int> sizes;
-    sizes << 200 << 1000;  // 左侧固定200像素，右侧占据剩余空间
+    sizes << 200 << 800;  // 左侧固定200像素，右侧占据剩余空间
     mainSplitter->setSizes(sizes);
 
     // 将分割器添加到主布局
@@ -154,7 +163,6 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     connect(sendButton, &QPushButton::clicked, this, &MainWindow::onSendButtonClicked);
     // 允许按 Enter 键发送消息
     connect(messageInput, &QLineEdit::returnPressed, this, &MainWindow::onSendButtonClicked);
-
     // 连接用户列表点击事件
     connect(userListWidget, &QListWidget::itemClicked, this, &MainWindow::onUserListItemClicked);
 
@@ -215,13 +223,55 @@ void MainWindow::onSendButtonClicked() {
 void MainWindow::initializeUserList() {
     userListWidget->clear();
 
+    // 设置 QListWidget 的样式
+    userListWidget->setStyleSheet(
+        "QListWidget {"
+        "    border: none;"
+        "    background-color: #6690A0;"
+        "    outline: none;"
+        "}"
+        "QListWidget::item {"
+        "    height: 45px;"                    // 固定每项高度
+        "    padding: 8px 12px;"              // 内边距
+        "    margin: 2px 8px;"                // 外边距
+        "    border-radius: 6px;"             // 圆角
+        "    background-color: #6690A0;"        // 默认背景色
+        "    border: 1px solid #e0e0e0;"      // 边框
+        "}"
+        "QListWidget::item:hover {"
+        "    background-color: #607D8B;"      // hover时的背景色（浅蓝色）
+        "    border-color: white;"          // hover时的边框色
+        "}"
+        "QListWidget::item:selected {"
+        "    background-color: #009688;"      // 选中时的背景色（蓝色）
+        "    color: white;"                   // 选中时的文字颜色
+        "    border-color: #1976d2;"          // 选中时的边框色
+        "}"
+        "QListWidget::item:selected:hover {"
+        "    background-color: #009688;"      // 选中且hover时的背景色（深蓝色）
+        "}"
+    );
+
     // 添加公共聊天室选项
     QListWidgetItem* publicItem = new QListWidgetItem("📢 公共聊天室");
     publicItem->setData(Qt::UserRole, "PUBLIC"); // 存储聊天类型标识
-    publicItem->setFont(QFont("", 10, QFont::Bold));
-    publicItem->setForeground(QColor(0, 150, 136)); // 设置为绿色
+    // 设置字体但不设置颜色，让CSS样式控制
+    QFont publicFont;
+    publicFont.setPointSize(11);
+    publicFont.setBold(true);
+    publicItem->setFont(publicFont);
+
     userListWidget->addItem(publicItem);
 
+    // 添加分隔线样式的文本项
+    QListWidgetItem* separator = new QListWidgetItem("────── 在线用户 ──────");
+    separator->setFlags(Qt::NoItemFlags); // 不可选中
+    separator->setTextAlignment(Qt::AlignCenter);
+    // 给分隔线设置特殊样式
+    QFont separatorFont;
+    separatorFont.setPointSize(9);
+    separator->setFont(separatorFont);
+    separator->setForeground(QColor(128, 128, 128));
     // 设置默认选中公共聊天室
     userListWidget->setCurrentItem(publicItem);
 
@@ -229,7 +279,13 @@ void MainWindow::initializeUserList() {
     QStringList mockUsers = {"用户1", "用户2", "用户3"};
     for (const QString& username : mockUsers) {
         QListWidgetItem* item = new QListWidgetItem("👤 " + username);
-        item->setData(Qt::UserRole, username); // 存储用户名
+        item->setData(Qt::UserRole, username);
+
+        // 设置普通用户的字体
+        QFont userFont;
+        userFont.setPointSize(10);
+        item->setFont(userFont);
+
         userListWidget->addItem(item);
     }
 
@@ -274,6 +330,10 @@ void MainWindow::updateUserList(const QJsonArray& users) {
         if (username != currentUsername) { // 不显示自己
             QListWidgetItem* item = new QListWidgetItem("👤 " + username);
             item->setData(Qt::UserRole, username);
+            // 设置普通用户的字体
+            QFont userFont;
+            userFont.setPointSize(10);
+            item->setFont(userFont);
             userListWidget->addItem(item);
         }
     }
