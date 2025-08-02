@@ -84,4 +84,7 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "chatMessage") {
         emit chatMessageReceived(response);
     }
+    else {
+        qDebug() << "未知消息类型：" << type;
+    }
 }

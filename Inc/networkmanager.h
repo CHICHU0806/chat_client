@@ -19,6 +19,7 @@ public:
     void registerResponse(const QJsonObject& response);
     void loginResponse(const QJsonObject& response);
     void chatMessageReceived(const QJsonObject& message);
+    void userListUpdated(const QJsonObject& response); // 添加这个信号
 
 private:
     explicit NetworkManager(QObject* parent = nullptr);

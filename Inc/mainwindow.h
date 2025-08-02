@@ -33,11 +33,12 @@ protected:
 
 private slots:
     // NetworkManager 相关的槽函数
-    // void handleChatMessage(const QJsonObject& message);
-    // void handleUserListUpdate(const QJsonObject& response);
+    void handleChatMessage(const QJsonObject& message);
 
     // **新增：聊天界面按钮的槽函数**
     void onSendButtonClicked(); // 发送消息按钮点击时触发
+    void onUserListItemClicked(QListWidgetItem* item); // 添加用户列表点击事件
+
 
 private:
     QTextEdit *chatDisplay;    // 显示聊天内容的区域
@@ -52,10 +53,13 @@ private:
     // 当前登录用户名
     QString currentUsername;
 
+    //用户列表相关函数
+    void initializeUserList(); // 初始化用户列表
+    void updateUserList(const QJsonArray& users); // 更新在线用户列表
+    void requestUserList(); // 请求用户列表
+
     // 辅助函数
-    // void updateUserList(const QJsonArray& users);
      void sendMessageToServer(const QString &msg);
-    // void requestUserList(); // 请求用户列表
 };
 
 #endif // MAINWINDOW_H

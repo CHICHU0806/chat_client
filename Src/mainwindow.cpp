@@ -6,6 +6,7 @@
 #include <qboxlayout> // 用于布局
 #include <QHostAddress> // 用于 QTcpSocket
 #include <QJsonDocument> // 用于 JSON 处理
+#include <QJsonArray>
 #include <QJsonObject>   // 用于 JSON 处理
 #include <QDateTime>     // 用于显示消息时间
 
@@ -154,6 +155,16 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     // 允许按 Enter 键发送消息
     connect(messageInput, &QLineEdit::returnPressed, this, &MainWindow::onSendButtonClicked);
 
+    // 连接用户列表点击事件
+    connect(userListWidget, &QListWidget::itemClicked, this, &MainWindow::onUserListItemClicked);
+
+    // 初始化用户列表
+    initializeUserList();
+
+    //连接networkmanager的信号
+    auto* network = NetworkManager::instance();
+    connect(network, &NetworkManager::chatMessageReceived, this, &MainWindow::handleChatMessage);
+
     qDebug() << "MainWindow initialized with shared socket.";
 }
 
@@ -198,6 +209,101 @@ void MainWindow::onSendButtonClicked() {
         messageInput->setEnabled(false);
         sendButton->setEnabled(false);
     }
+}
+
+// 初始化用户列表
+void MainWindow::initializeUserList() {
+    userListWidget->clear();
+
+    // 添加公共聊天室选项
+    QListWidgetItem* publicItem = new QListWidgetItem("📢 公共聊天室");
+    publicItem->setData(Qt::UserRole, "PUBLIC"); // 存储聊天类型标识
+    publicItem->setFont(QFont("", 10, QFont::Bold));
+    publicItem->setForeground(QColor(0, 150, 136)); // 设置为绿色
+    userListWidget->addItem(publicItem);
+
+    // 设置默认选中公共聊天室
+    userListWidget->setCurrentItem(publicItem);
+
+    // 模拟添加一些在线用户（后续从服务器获取）
+    QStringList mockUsers = {"用户1", "用户2", "用户3"};
+    for (const QString& username : mockUsers) {
+        QListWidgetItem* item = new QListWidgetItem("👤 " + username);
+        item->setData(Qt::UserRole, username); // 存储用户名
+        userListWidget->addItem(item);
+    }
+
+    qDebug() << "用户列表已初始化";
+}
+
+// 处理用户列表点击事件
+void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
+    if (!item || item->flags() == Qt::NoItemFlags) {
+        return; // 忽略分隔线点击
+    }
+
+    QString chatTarget = item->data(Qt::UserRole).toString();
+
+    if (chatTarget == "PUBLIC") {
+        // 切换到公共聊天
+        setWindowTitle("聊天室 - 公共聊天");
+        messageInput->setPlaceholderText("发送到公共聊天室...");
+        chatDisplay->clear();
+        chatDisplay->append("<font color='green'>--- 欢迎来到公共聊天室 ---</font>");
+        qDebug() << "切换到公共聊天";
+    } else {
+        // 切换到私聊
+        setWindowTitle("聊天室 - 与 " + chatTarget + " 私聊");
+        messageInput->setPlaceholderText("发送给 " + chatTarget + "...");
+        chatDisplay->clear();
+        chatDisplay->append(QString("<font color='blue'>--- 与 %1 的私聊 ---</font>").arg(chatTarget));
+        qDebug() << "切换到与" << chatTarget << "的私聊";
+    }
+}
+
+// 更新用户列表（从服务器接收到用户列表时调用）
+void MainWindow::updateUserList(const QJsonArray& users) {
+    // 清除除了公共聊天室和分隔线之外的所有项
+    for (int i = userListWidget->count() - 1; i >= 2; i--) {
+        delete userListWidget->takeItem(i);
+    }
+
+    // 添加在线用户
+    for (const auto& userValue : users) {
+        QString username = userValue.toString();
+        if (username != currentUsername) { // 不显示自己
+            QListWidgetItem* item = new QListWidgetItem("👤 " + username);
+            item->setData(Qt::UserRole, username);
+            userListWidget->addItem(item);
+        }
+    }
+
+    qDebug() << "用户列表已更新，在线用户数：" << users.size();
+}
+
+// 请求用户列表
+void MainWindow::requestUserList() {
+    QJsonObject request;
+    request["type"] = "getUserList";
+
+    NetworkManager::instance()->sendMessage(request);
+    qDebug() << "已请求用户列表";
+}
+
+// 处理接收到的聊天消息
+void MainWindow::handleChatMessage(const QJsonObject& message) {
+    QString sender = message["sender"].toString();
+    QString content = message["content"].toString();
+    QString timestamp = message["timestamp"].toString();
+
+    // 暂时简单显示所有消息
+    chatDisplay->append(QString("[%1] <b>%2:</b> %3")
+                         .arg(timestamp)
+                         .arg(sender)
+                         .arg(content));
+
+    // 滚动到底部
+    chatDisplay->moveCursor(QTextCursor::End);
 }
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
