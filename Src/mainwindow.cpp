@@ -11,9 +11,10 @@
 #include <QDateTime>     // 用于显示消息时间
 
 // 构造函数
-MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
+MainWindow::MainWindow(QTcpSocket *socket,const QString& username, QWidget *parent)
     : QWidget(parent),
-      mainTcpSocket(socket) // **将传入的共享 socket 赋值给成员变量**
+      mainTcpSocket(socket), // **将传入的共享 socket 赋值给成员变量**
+      currentUsername(username)
 {
     setWindowTitle(" "); // 设置窗口标题
     setMinimumSize(1000, 750);        // 设置窗口最小大小
@@ -165,6 +166,11 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
     connect(messageInput, &QLineEdit::returnPressed, this, &MainWindow::onSendButtonClicked);
     // 连接用户列表点击事件
     connect(userListWidget, &QListWidget::itemClicked, this, &MainWindow::onUserListItemClicked);
+    // 新增：监听输入框内容变化，控制发送按钮状态
+    connect(messageInput, &QLineEdit::textChanged, this, &MainWindow::onMessageInputChanged);
+
+    // 新增：设置发送按钮初始状态为禁用
+    sendButton->setEnabled(false);
 
     // 初始化用户列表
     initializeUserList();
@@ -198,18 +204,11 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 void MainWindow::onSendButtonClicked() {
     QString messageText = messageInput->text().trimmed(); // 获取并去除空白
     if (messageText.isEmpty()) {
-        QMessageBox::warning(this, "发送失败", "消息内容不能为空！");
-        return;
+        return; // 静默返回，不显示警告
     }
 
     if (mainTcpSocket->state() == QAbstractSocket::ConnectedState) {
-        // 假设我们有一个默认的发送者，或者从登录信息中获取
-        // 为了简单，暂时用 "You" 或获取当前登录的用户名 (如果 LoginWindow 存储了)
-        // 例如：QString currentUsername = "TestUser"; // 真实项目中应从登录信息获取
-        // sendMessageToServer(messageText, currentUsername);
-
-        // 为了简化，我们只发送消息文本，服务器可以根据连接的socket识别发送者
-        sendMessageToServer(messageText);
+        sendMessageToServer(messageText, currentUsername);
 
         messageInput->clear(); // 清空输入框
     } else {
@@ -217,6 +216,12 @@ void MainWindow::onSendButtonClicked() {
         messageInput->setEnabled(false);
         sendButton->setEnabled(false);
     }
+}
+
+//输入框内容变化时的槽函数
+void MainWindow::onMessageInputChanged(const QString& text) {
+    // 当输入框有内容时启用发送按钮，否则禁用
+    sendButton->setEnabled(!text.trimmed().isEmpty());
 }
 
 // 初始化用户列表
@@ -358,31 +363,20 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
 }
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
-void MainWindow::sendMessageToServer(const QString &msg) {
+void MainWindow::sendMessageToServer(const QString &msg, const QString &currentUsername) {
     QJsonObject request;
     request["type"] = "chatMessage"; // 请求类型：聊天消息
-    // request["sender"] = "YourUsername"; // 实际项目中应从登录的用户信息中获取
     request["content"] = msg;
 
-    QByteArray jsonData = QJsonDocument(request).toJson(QJsonDocument::Compact);
-
-    QByteArray dataBlock;
-    QDataStream out(&dataBlock, QIODevice::WriteOnly);
-    out.setVersion(QDataStream::Qt_6_0);
-    out << (quint32)0; // 预留总长度位置
-    out << jsonData;   // 写入实际 JSON 数据
-
-    out.device()->seek(0);
-    out << (quint32)(dataBlock.size() - sizeof(quint32));
-
-    mainTcpSocket->write(dataBlock);
-    mainTcpSocket->flush(); // 强制发送缓冲数据
+    // 使用 NetworkManager 统一发送
+    NetworkManager::instance()->sendMessage(request);
 
     qInfo() << "已发送聊天消息：" << msg;
 
     // 假设自己发送的消息也显示在自己的聊天框中
     QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
-    chatDisplay->append(QString("<font color='blue'>[%1] <b>我:</b> %2</font>")
+    chatDisplay->append(QString("<font color='blue'>[%1] <b>%2:</b> %3</font>")
                          .arg(timestamp)
+                         .arg(currentUsername.isEmpty() ? "我" : currentUsername)  // 使用真实用户名
                          .arg(msg));
 }

@@ -184,8 +184,9 @@ void LoginWindow::handleLoginResponse(const QJsonObject& response) {
     QString message = response["message"].toString();
 
     if (status == "success") {
+        QString username = response["username"].toString();  // 获取用户名
         this->hide();
-        MainWindow *mainWindow = new MainWindow(NetworkManager::instance()->getSocket());
+        MainWindow *mainWindow = new MainWindow(NetworkManager::instance()->getSocket(), username);  // 传递用户名
         mainWindow->show();
     } else {
         QMessageBox::warning(this, "登录失败", message);
