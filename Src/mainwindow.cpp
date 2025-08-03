@@ -17,7 +17,6 @@ MainWindow::MainWindow(QTcpSocket *socket, QWidget *parent)
 {
     setWindowTitle(" "); // 设置窗口标题
     setMinimumSize(1000, 750);        // 设置窗口最小大小
-    setStyleSheet("MainWindow { background-color: #6690A0; }");
 
     // 创建主布局
     QVBoxLayout *mainLayout = new QVBoxLayout(this);
