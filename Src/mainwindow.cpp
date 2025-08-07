@@ -348,24 +348,60 @@ void MainWindow::requestUserList() {
 
 // 处理接收到的聊天消息
 void MainWindow::handleChatMessage(const QJsonObject& message) {
-    QString sender = message["sender"].toString();
+    QString type = message["type"].toString();
+    QString status = message["status"].toString();
+    QString sender = message["sender"].toString();        // 账号
+    QString username = message["username"].toString();    // 用户名
     QString content = message["content"].toString();
     QString timestamp = message["timestamp"].toString();
 
-    // 暂时简单显示所有消息
-    chatDisplay->append(QString("[%1] <b>%2:</b> %3")
-                         .arg(timestamp)
-                         .arg(sender)
-                         .arg(content));
+    // 调试输出
+    qDebug() << "收到消息 - type:" << type << "status:" << status
+             << "sender:" << sender << "username:" << username
+             << "content:" << content;
+
+    // 只处理聊天消息
+    if (type != "chatMessage") {
+        return;
+    }
+
+    // 处理时间戳格式（从ISO格式转换为显示格式）
+    QString displayTime;
+    if (!timestamp.isEmpty()) {
+        QDateTime dt = QDateTime::fromString(timestamp, Qt::ISODate);
+        if (dt.isValid()) {
+            displayTime = dt.toString("hh:mm:ss");
+        } else {
+            displayTime = QDateTime::currentDateTime().toString("hh:mm:ss");
+        }
+    } else {
+        displayTime = QDateTime::currentDateTime().toString("hh:mm:ss");
+    }
+
+    // 如果是自己发送的消息，不重复显示（因为在sendMessageToServer中已经显示了）
+    if (sender == currentUsername) {
+        qDebug() << "忽略自己发送的消息，避免重复显示";
+        return;
+    }
+
+    // 根据status处理不同类型的消息
+    if (status == "broadcast") {
+        // 处理公共聊天室消息
+        handlePublicChatMessage(username, content, displayTime);
+    } else {
+        // 处理其他类型消息（如私聊等）
+        qDebug() << "收到未处理的消息类型:" << status;
+    }
 
     // 滚动到底部
     chatDisplay->moveCursor(QTextCursor::End);
 }
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
-void MainWindow::sendMessageToServer(const QString &msg, const QString &currentUsername) {
+void MainWindow::sendMessageToServer(const QString &msg, const QString &account) {
     QJsonObject request;
     request["type"] = "chatMessage"; // 请求类型：聊天消息
+    request["account"] = account;  // ✅ 添加account字段
     request["content"] = msg;
 
     // 使用 NetworkManager 统一发送
@@ -379,4 +415,23 @@ void MainWindow::sendMessageToServer(const QString &msg, const QString &currentU
                          .arg(timestamp)
                          .arg(currentUsername.isEmpty() ? "我" : currentUsername)  // 使用真实用户名
                          .arg(msg));
+}
+
+//处理公共聊天消息
+void MainWindow::handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp) {
+    // 检查当前是否在公共聊天室
+    QListWidgetItem* currentItem = userListWidget->currentItem();
+    if (!currentItem || currentItem->data(Qt::UserRole).toString() != "PUBLIC") {
+        qDebug() << "当前不在公共聊天室，消息已接收但不显示";
+        return;
+    }
+
+    // 显示其他用户的消息（绿色）
+    QString displayName = username.isEmpty() ? "匿名用户" : username;
+    chatDisplay->append(QString("<font color='green'>[%1] <b>%2:</b> %3</font>")
+                         .arg(timestamp)
+                         .arg(displayName)
+                         .arg(content));
+
+    qDebug() << "显示公共聊天消息 -" << displayName << ":" << content;
 }

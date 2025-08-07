@@ -59,7 +59,8 @@ private:
     void requestUserList(); // 请求用户列表
 
     // 辅助函数
-     void sendMessageToServer(const QString &msg, const QString &username = QString());
+    void handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp);//处理公共聊天消息
+     void sendMessageToServer(const QString &msg, const QString &account = QString());
 };
 
 #endif // MAINWINDOW_H
