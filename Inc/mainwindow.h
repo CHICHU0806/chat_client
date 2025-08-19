@@ -6,6 +6,7 @@
 #ifndef MAINWINDOW_H
 #define MAINWINDOW_H
 
+#include "chatdatabase.h"
 #include <QWidget>
 #include <QLabel>      // 欢迎标签
 #include <QTextEdit>   // 用于显示聊天记录
@@ -24,7 +25,7 @@ class MainWindow : public QWidget {
 
 public:
     // 修改构造函数：现在它需要接收 LoginWindow 传递过来的共享 QTcpSocket 指针
-    explicit MainWindow(QTcpSocket *socket, const QString& username = QString(), QWidget *parent = nullptr);
+    explicit MainWindow(QTcpSocket *socket, const QString& username = QString(), const QString& account = QString(), QWidget *parent = nullptr);
     ~MainWindow(); // 析构函数
 
 protected:
@@ -52,6 +53,7 @@ private:
 
     // 当前登录用户名
     QString currentUsername;
+    QString currentAccount;   // 账号ID（数据库中的唯一标识）
 
     //用户列表相关函数
     void initializeUserList(); // 初始化用户列表
@@ -60,7 +62,11 @@ private:
 
     // 辅助函数
     void handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp);//处理公共聊天消息
-     void sendMessageToServer(const QString &msg, const QString &account = QString());
+    void sendMessageToServer(const QString &msg);
+
+    // 聊天记录相关方法
+    void loadChatHistory(const QString& chatType, const QString& chatTarget);
+    void saveChatMessage(const QString& chatType, const QString& chatTarget, const QString& senderAccount, const QString& senderUsername, const QString& content, bool isSelf = false);
 };
 
 #endif // MAINWINDOW_H

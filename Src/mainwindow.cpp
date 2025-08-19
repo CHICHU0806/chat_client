@@ -11,10 +11,11 @@
 #include <QDateTime>     // 用于显示消息时间
 
 // 构造函数
-MainWindow::MainWindow(QTcpSocket *socket,const QString& username, QWidget *parent)
+MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString& account, QWidget *parent)
     : QWidget(parent),
       mainTcpSocket(socket), // **将传入的共享 socket 赋值给成员变量**
-      currentUsername(username)
+      currentUsername(username),
+      currentAccount(account)     // 账号ID
 {
     setWindowTitle(" "); // 设置窗口标题
     setMinimumSize(1000, 750);        // 设置窗口最小大小
@@ -175,9 +176,17 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username, QWidget *pare
     // 初始化用户列表
     initializeUserList();
 
+    // 初始化数据库
+    if (!ChatDatabase::instance()->initDatabase(currentAccount)) {
+        QMessageBox::warning(this, "数据库错误", "无法初始化聊天记录数据库");
+    }
+
     //连接networkmanager的信号
     auto* network = NetworkManager::instance();
     connect(network, &NetworkManager::chatMessageReceived, this, &MainWindow::handleChatMessage);
+
+    //自动加载公共聊天室的历史记录（默认选中的是公共聊天室）
+    loadChatHistory("public", "PUBLIC");
 
     qDebug() << "MainWindow initialized with shared socket.";
 }
@@ -208,9 +217,9 @@ void MainWindow::onSendButtonClicked() {
     }
 
     if (mainTcpSocket->state() == QAbstractSocket::ConnectedState) {
-        sendMessageToServer(messageText, currentUsername);
-
-        messageInput->clear(); // 清空输入框
+        // 移除多余的参数，直接调用
+        sendMessageToServer(messageText);
+        messageInput->clear();
     } else {
         QMessageBox::critical(this, "网络错误", "未连接到服务器，无法发送消息！");
         messageInput->setEnabled(false);
@@ -291,25 +300,23 @@ void MainWindow::initializeUserList() {
 // 处理用户列表点击事件
 void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
     if (!item || item->flags() == Qt::NoItemFlags) {
-        return; // 忽略分隔线点击
+        return;
     }
 
     QString chatTarget = item->data(Qt::UserRole).toString();
 
     if (chatTarget == "PUBLIC") {
-        // 切换到公共聊天
         setWindowTitle("聊天室 - 公共聊天");
         messageInput->setPlaceholderText("发送到公共聊天室...");
-        chatDisplay->clear();
-        chatDisplay->append("<font color='green'>--- 欢迎来到公共聊天室 ---</font>");
-        qDebug() << "切换到公共聊天";
+        // 加载公共聊天历史记录
+        loadChatHistory("public", "PUBLIC");
+        qDebug() << "切换到公共聊天并加载历史记录";
     } else {
-        // 切换到私聊
         setWindowTitle("聊天室 - 与 " + chatTarget + " 私聊");
         messageInput->setPlaceholderText("发送给 " + chatTarget + "...");
-        chatDisplay->clear();
-        chatDisplay->append(QString("<font color='blue'>--- 与 %1 的私聊 ---</font>").arg(chatTarget));
-        qDebug() << "切换到与" << chatTarget << "的私聊";
+        // 加载私聊历史记录
+        loadChatHistory("private", chatTarget);
+        qDebug() << "切换到与" << chatTarget << "的私聊并加载历史记录";
     }
 }
 
@@ -379,8 +386,7 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
     }
 
     // 如果是自己发送的消息，不重复显示（因为在sendMessageToServer中已经显示了）
-    if (sender == currentUsername) {
-        qDebug() << "忽略自己发送的消息，避免重复显示";
+    if (sender == currentAccount) {
         return;
     }
 
@@ -398,40 +404,133 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
 }
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
-void MainWindow::sendMessageToServer(const QString &msg, const QString &account) {
+void MainWindow::sendMessageToServer(const QString &msg) {
     QJsonObject request;
-    request["type"] = "chatMessage"; // 请求类型：聊天消息
-    request["account"] = account;  // ✅ 添加account字段
+    request["type"] = "chatMessage";
+    request["account"] = currentAccount;
     request["content"] = msg;
 
-    // 使用 NetworkManager 统一发送
+    QString chatType;
+    QString chatTarget;
+
+    QListWidgetItem* currentItem = userListWidget->currentItem();
+    if (currentItem && currentItem->data(Qt::UserRole).toString() == "PUBLIC") {
+        request["messageType"] = "public";
+        chatType = "public";
+        chatTarget = "PUBLIC";
+    } else if (currentItem) {
+        request["messageType"] = "private";
+        request["targetAccount"] = currentItem->data(Qt::UserRole).toString();
+        chatType = "private";
+        chatTarget = currentItem->data(Qt::UserRole).toString();
+    } else {
+        request["messageType"] = "public";
+        chatType = "public";
+        chatTarget = "PUBLIC";
+    }
+
     NetworkManager::instance()->sendMessage(request);
+
+    // 保存自己发送的消息到数据库
+    saveChatMessage(chatType, chatTarget, currentAccount, currentUsername, msg, true);
 
     qInfo() << "已发送聊天消息：" << msg;
 
-    // 假设自己发送的消息也显示在自己的聊天框中
     QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
     chatDisplay->append(QString("<font color='blue'>[%1] <b>%2:</b> %3</font>")
                          .arg(timestamp)
-                         .arg(currentUsername.isEmpty() ? "我" : currentUsername)  // 使用真实用户名
+                         .arg(currentUsername)
                          .arg(msg));
 }
 
 //处理公共聊天消息
 void MainWindow::handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp) {
-    // 检查当前是否在公共聊天室
     QListWidgetItem* currentItem = userListWidget->currentItem();
     if (!currentItem || currentItem->data(Qt::UserRole).toString() != "PUBLIC") {
-        qDebug() << "当前不在公共聊天室，消息已接收但不显示";
+        // 即使不在当前窗口也要保存消息
+        saveChatMessage("public", "PUBLIC", "", username, content, false);
+        qDebug() << "当前不在公共聊天室，消息已保存但不显示";
         return;
     }
 
-    // 显示其他用户的消息（绿色）
+    // 保存消息到数据库
+    saveChatMessage("public", "PUBLIC", "", username, content, false);
+
     QString displayName = username.isEmpty() ? "匿名用户" : username;
     chatDisplay->append(QString("<font color='green'>[%1] <b>%2:</b> %3</font>")
                          .arg(timestamp)
                          .arg(displayName)
                          .arg(content));
 
-    qDebug() << "显示公共聊天消息 -" << displayName << ":" << content;
+    qDebug() << "显示并保存公共聊天消息 -" << displayName << ":" << content;
+}
+
+//聊天记录加载
+void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTarget) {
+    // 限制加载最近30条记录
+    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, 30);
+
+    chatDisplay->clear();
+
+    if (chatType == "public") {
+        chatDisplay->append("<font color='green'>--- 欢迎来到公共聊天室 ---</font>");
+    } else {
+        chatDisplay->append(QString("<font color='blue'>--- 与 %1 的私聊 ---</font>").arg(chatTarget));
+    }
+
+    // 检查是否还有更多历史记录
+    QList<ChatMessage> allMessages = ChatDatabase::instance()->getMessages(chatType, chatTarget, 1000);
+    bool hasMoreHistory = allMessages.size() > 30;
+
+    if (hasMoreHistory) {
+        chatDisplay->append("<font color='#0066CC'><u>点击这里加载更多历史记录...</u></font>");
+    }
+
+    // 如果有历史记录，先显示提示
+    if (!messages.isEmpty()) {
+        chatDisplay->append("<font color='#888888'>--- 以下是最近的聊天记录 ---</font>");
+    }
+
+    // 显示历史消息
+    for (const ChatMessage& msg : messages) {
+        QString displayTime = msg.timestamp.toString("MM-dd hh:mm:ss");
+        QString color = msg.isSelf ? "blue" : "green";
+
+        chatDisplay->append(QString("<font color='%1'>[%2] <b>%3:</b> %4</font>")
+                             .arg(color)
+                             .arg(displayTime)
+                             .arg(msg.senderUsername)
+                             .arg(msg.content));
+    }
+
+    // 如果有历史记录，添加分隔线
+    if (!messages.isEmpty()) {
+        chatDisplay->append("<font color='#888888'>--- 历史记录结束 ---</font>");
+    }
+
+    // 确保滚动到底部（显示最新消息）
+    QTextCursor cursor = chatDisplay->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    chatDisplay->setTextCursor(cursor);
+    chatDisplay->ensureCursorVisible();
+
+    qDebug() << "已加载" << messages.size() << "条历史记录，总共有" << allMessages.size() << "条记录";
+}
+
+// 保存聊天消息到数据库
+void MainWindow::saveChatMessage(const QString& chatType, const QString& chatTarget,
+                                const QString& senderAccount, const QString& senderUsername,
+                                const QString& content, bool isSelf) {
+    ChatMessage message;
+    message.chatType = chatType;
+    message.chatTarget = chatTarget;
+    message.senderAccount = senderAccount;
+    message.senderUsername = senderUsername;
+    message.content = content;
+    message.timestamp = QDateTime::currentDateTime();
+    message.isSelf = isSelf;
+
+    if (!ChatDatabase::instance()->saveMessage(message)) {
+        qWarning() << "保存聊天消息失败";
+    }
 }

@@ -183,10 +183,23 @@ void LoginWindow::handleLoginResponse(const QJsonObject& response) {
     QString status = response["status"].toString();
     QString message = response["message"].toString();
 
+    // 调试输出：查看服务器实际返回的内容
+    qDebug() << "服务器登录响应:" << response;
+
     if (status == "success") {
         QString username = response["username"].toString();  // 获取用户名
+        QString account = response["account"].toString();    // 账号ID（新增）
+        // 调试输出：检查获取到的值
+        qDebug() << "从响应中获取 - username:" << username << "account:" << account;
+
+        // 如果服务器没有返回account，使用登录时输入的账号
+        if (account.isEmpty()) {
+            account = accountLineEdit->text();  // 使用登录时输入的账号
+            qDebug() << "服务器未返回account，使用输入的账号:" << account;
+        }
+
         this->hide();
-        MainWindow *mainWindow = new MainWindow(NetworkManager::instance()->getSocket(), username);  // 传递用户名
+        MainWindow *mainWindow = new MainWindow(NetworkManager::instance()->getSocket(), username, account);
         mainWindow->show();
     } else {
         QMessageBox::warning(this, "登录失败", message);
