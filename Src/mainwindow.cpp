@@ -266,7 +266,8 @@ void MainWindow::onMessageInputChanged(const QString& text) {
 // 个人信息按钮槽函数
 void MainWindow::onPersonalMsgButtonClicked() {
     if (!personalMsgWindow) {
-        personalMsgWindow = new PersonalMsgWindow(this);
+        // 传入当前用户的用户名和账号信息
+        personalMsgWindow = new PersonalMsgWindow(currentUsername, currentAccount, this);
     }
 
     personalMsgWindow->show();
