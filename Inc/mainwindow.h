@@ -19,10 +19,12 @@
 #include <QListWidget>  // 用于显示在线用户列表
 #include <QSplitter>
 #include <QMessageBox>
+#include "chatdatabase.h"
+
+class PersonalMsgWindow; //声明
 
 class MainWindow : public QWidget {
     Q_OBJECT // 启用 Qt 的元对象系统
-
 public:
     // 修改构造函数：现在它需要接收 LoginWindow 传递过来的共享 QTcpSocket 指针
     explicit MainWindow(QTcpSocket *socket, const QString& username = QString(), const QString& account = QString(), QWidget *parent = nullptr);
@@ -31,6 +33,8 @@ public:
 protected:
     //重写 closeEvent，用于在主窗口关闭时处理断开连接或退出程序
     void closeEvent(QCloseEvent *event) override;
+    //重写 showEvent，用于开屏聚焦输入框
+    void showEvent(QShowEvent* event) override;
 
 private slots:
     // NetworkManager 相关的槽函数
@@ -40,6 +44,9 @@ private slots:
     void onSendButtonClicked(); // 发送消息按钮点击时触发
     void onUserListItemClicked(QListWidgetItem* item); // 添加用户列表点击事件
     void onMessageInputChanged(const QString& text); // 输入框内容变化时触发
+
+    //顶部栏个人信息设置
+    void onPersonalMsgButtonClicked(); // 添加按钮点击槽函数=
 
 private:
     QTextEdit *chatDisplay;    // 显示聊天内容的区域
@@ -54,6 +61,10 @@ private:
     // 当前登录用户名
     QString currentUsername;
     QString currentAccount;   // 账号ID（数据库中的唯一标识）
+
+    //顶部栏个人信息设置
+    QPushButton *personalMsgButton; // 添加按钮成员变量
+    PersonalMsgWindow *personalMsgWindow; // 添加窗口成员变量
 
     //用户列表相关函数
     void initializeUserList(); // 初始化用户列表

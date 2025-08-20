@@ -3,6 +3,7 @@
 //
 #include "mainwindow.h"
 #include "networkmanager.h"
+#include "personalmsgwindow.h"
 #include <qboxlayout> // 用于布局
 #include <QHostAddress> // 用于 QTcpSocket
 #include <QJsonDocument> // 用于 JSON 处理
@@ -15,7 +16,8 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     : QWidget(parent),
       mainTcpSocket(socket), // **将传入的共享 socket 赋值给成员变量**
       currentUsername(username),
-      currentAccount(account)     // 账号ID
+      currentAccount(account),     // 账号ID
+      personalMsgWindow(nullptr) // 初始化为空指针
 {
     setWindowTitle(" "); // 设置窗口标题
     setMinimumSize(1000, 750);        // 设置窗口最小大小
@@ -39,6 +41,26 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     QHBoxLayout *topBarLayout = new QHBoxLayout(topBar);
     topBarLayout->setContentsMargins(10, 0, 10, 0);
 
+    // 创建个人消息按钮（圆形）
+    personalMsgButton = new QPushButton(this);
+    personalMsgButton->setFixedSize(35, 35); // 设置为圆形大小
+    personalMsgButton->setStyleSheet(
+        "QPushButton {"
+        "    background-color: #FFFFFF;"
+        "    border: 2px solid #CCCCCC;"
+        "    border-radius: 17px;" // 半径为宽度的一半，形成圆形
+        "    color: #666666;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: #F0F0F0;"
+        "    border-color: #999999;"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: #E0E0E0;"
+        "}"
+    );
+
+    topBarLayout->addWidget(personalMsgButton); // 添加到左侧
     topBarLayout->addStretch();  // 左侧弹性空间
 
     // 添加一些示例控件到顶部栏
@@ -169,6 +191,8 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(userListWidget, &QListWidget::itemClicked, this, &MainWindow::onUserListItemClicked);
     // 新增：监听输入框内容变化，控制发送按钮状态
     connect(messageInput, &QLineEdit::textChanged, this, &MainWindow::onMessageInputChanged);
+    //个人信息按钮
+    connect(personalMsgButton, &QPushButton::clicked, this, &MainWindow::onPersonalMsgButtonClicked);
 
     // 新增：设置发送按钮初始状态为禁用
     sendButton->setEnabled(false);
@@ -209,6 +233,12 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     QWidget::closeEvent(event); // 调用基类的 closeEvent，确保窗口正常关闭
 }
 
+//重写 showEvent 方法，在窗口显示时设置输入框焦点
+void MainWindow::showEvent(QShowEvent* event) {
+    QWidget::showEvent(event);
+    messageInput->setFocus();  // 窗口显示时聚焦到输入框
+}
+
 // **槽函数：发送消息按钮点击时触发**
 void MainWindow::onSendButtonClicked() {
     QString messageText = messageInput->text().trimmed(); // 获取并去除空白
@@ -231,6 +261,17 @@ void MainWindow::onSendButtonClicked() {
 void MainWindow::onMessageInputChanged(const QString& text) {
     // 当输入框有内容时启用发送按钮，否则禁用
     sendButton->setEnabled(!text.trimmed().isEmpty());
+}
+
+// 个人信息按钮槽函数
+void MainWindow::onPersonalMsgButtonClicked() {
+    if (!personalMsgWindow) {
+        personalMsgWindow = new PersonalMsgWindow(this);
+    }
+
+    personalMsgWindow->show();
+    personalMsgWindow->raise(); // 确保窗口显示在最前面
+    personalMsgWindow->activateWindow(); // 激活窗口
 }
 
 // 初始化用户列表
@@ -318,6 +359,9 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
         loadChatHistory("private", chatTarget);
         qDebug() << "切换到与" << chatTarget << "的私聊并加载历史记录";
     }
+
+    // 切换聊天对象后自动聚焦到输入框
+    messageInput->setFocus();
 }
 
 // 更新用户列表（从服务器接收到用户列表时调用）
@@ -437,6 +481,7 @@ void MainWindow::sendMessageToServer(const QString &msg) {
     qInfo() << "已发送聊天消息：" << msg;
 
     QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+    chatDisplay->append("<br>");
     chatDisplay->append(QString("<font color='blue'>[%1] <b>%2:</b> %3</font>")
                          .arg(timestamp)
                          .arg(currentUsername)
@@ -457,6 +502,7 @@ void MainWindow::handlePublicChatMessage(const QString& username, const QString&
     saveChatMessage("public", "PUBLIC", "", username, content, false);
 
     QString displayName = username.isEmpty() ? "匿名用户" : username;
+    chatDisplay->append("<br>");
     chatDisplay->append(QString("<font color='green'>[%1] <b>%2:</b> %3</font>")
                          .arg(timestamp)
                          .arg(displayName)
@@ -486,26 +532,17 @@ void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTar
         chatDisplay->append("<font color='#0066CC'><u>点击这里加载更多历史记录...</u></font>");
     }
 
-    // 如果有历史记录，先显示提示
-    if (!messages.isEmpty()) {
-        chatDisplay->append("<font color='#888888'>--- 以下是最近的聊天记录 ---</font>");
-    }
-
     // 显示历史消息
     for (const ChatMessage& msg : messages) {
         QString displayTime = msg.timestamp.toString("MM-dd hh:mm:ss");
         QString color = msg.isSelf ? "blue" : "green";
 
+        chatDisplay->append("<br>");
         chatDisplay->append(QString("<font color='%1'>[%2] <b>%3:</b> %4</font>")
                              .arg(color)
                              .arg(displayTime)
                              .arg(msg.senderUsername)
                              .arg(msg.content));
-    }
-
-    // 如果有历史记录，添加分隔线
-    if (!messages.isEmpty()) {
-        chatDisplay->append("<font color='#888888'>--- 历史记录结束 ---</font>");
     }
 
     // 确保滚动到底部（显示最新消息）

@@ -29,6 +29,8 @@ add_executable(chat_client main.cpp
         Src/networkmanager.cpp
         Src/chatdatabase.cpp
         Inc/chatdatabase.h
+        Src/personalmsgwindow.cpp
+        Inc/personalmsgwindow.h
 )
 target_include_directories(${PROJECT_NAME} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/Inc
