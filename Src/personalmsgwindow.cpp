@@ -21,63 +21,67 @@ PersonalMsgWindow::PersonalMsgWindow(const QString& username, const QString& acc
       currentAccount(account)  // 直接初始化用户信息
     {
         setupUI();
+
+        // 连接网络管理器信号
+        connect(NetworkManager::instance(), &NetworkManager::userInfoUpdateResponse,this, &PersonalMsgWindow::onUserInfoUpdateResponse);
     }
 
     PersonalMsgWindow::~PersonalMsgWindow() {
     }
 
-    void PersonalMsgWindow::setupUI() {
-        setWindowTitle("个人信息设置");
-        setFixedSize(900, 600); // 增加窗口宽度
-        setModal(true);
+void PersonalMsgWindow::setupUI() {
+    setWindowTitle("个人信息设置");
+    setFixedSize(900, 600);
+    setModal(true);
 
-        // 设置窗口样式 - 使用与MainWindow相同的背景色
-        setStyleSheet(
-            "QDialog {"
-            "    background-color: #6690A0;"
-            "    border-radius: 8px;"
-            "}"
-            "QLineEdit {"
-            "    border: 1px solid #ddd;"
-            "    border-radius: 6px;"
-            "    padding: 10px 15px;"
-            "    font-size: 14px;"
-            "    background-color: white;"
-            "    min-height: 20px;"
-            "}"
-            "QLineEdit:focus {"
-            "    border-color: #1E90FF;"
-            "    outline: none;"
-            "}"
-            "QPushButton {"
-            "    background-color: #1E90FF;"
-            "    color: white;"
-            "    border: none;"
-            "    border-radius: 8px;"
-            "    padding: 12px 25px;"
-            "    font-size: 16px;"
-            "    font-weight: bold;"
-            "    min-height: 45px;"
-            "}"
-            "QPushButton:hover {"
-            "    background-color: #1873CC;"
-            "    transform: translateY(-1px);"
-            "}"
-            "QPushButton:pressed {"
-            "    background-color: #0854AC;"
-            "    transform: translateY(1px);"
-            "}"
-            "QSplitter::handle {"
-            "    background-color: #5A7A8A;"
-            "    width: 3px;"
-            "    margin: 20px 0px;"
-            "    border-radius: 1px;"
-            "}"
-            "QSplitter::handle:hover {"
-            "    background-color: #4A6A7A;"
-            "}"
-        );
-
+    // 修改窗口样式，移除不支持的 transform 和 box-shadow
+    setStyleSheet(
+        "QDialog {"
+        "    background-color: #6690A0;"
+        "    border-radius: 10px;"
+        "}"
+        "QLineEdit {"
+        "    border: 2px solid #E0E0E0;"
+        "    border-radius: 8px;"
+        "    padding: 12px 15px;"
+        "    font-size: 14px;"
+        "    background-color: #FFFFFF;"
+        "    color: #333333;"
+        "}"
+        "QLineEdit:focus {"
+        "    border-color: #4CAF50;"
+        "    background-color: #FAFAFA;"
+        "}"
+        "QPushButton {"
+        "    background-color: #4CAF50;"
+        "    color: white;"
+        "    border: none;"
+        "    border-radius: 12px;"
+        "    padding: 15px 30px;"
+        "    font-size: 16px;"
+        "    font-weight: bold;"
+        "    margin-top: 20px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: #5CBF60;"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: #3E8E41;"
+        "}"
+        "QPushButton:disabled {"
+        "    background-color: #CCCCCC;"
+        "    color: #888888;"
+        "}"
+        "QSplitter::handle {"
+        "    background-color: #5A7A8A;"
+        "    width: 3px;"
+        "    margin: 20px 0px;"
+        "    border-radius: 1px;"
+        "}"
+        "QSplitter::handle:hover {"
+        "    background-color: #4A6A7A;"
+        "}"
+    );
         // 创建主分割器
         mainSplitter = new QSplitter(Qt::Horizontal, this);
         mainSplitter->setChildrenCollapsible(false);
@@ -244,8 +248,7 @@ PersonalMsgWindow::PersonalMsgWindow(const QString& username, const QString& acc
         confirmButton->setMaximumWidth(300);
         confirmButton->setStyleSheet(
             "QPushButton {"
-            "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-            "                stop:0 #4CAF50, stop:1 #45A049);"
+            "    background-color: #4CAF50;"
             "    color: white;"
             "    border: none;"
             "    border-radius: 12px;"
@@ -255,15 +258,10 @@ PersonalMsgWindow::PersonalMsgWindow(const QString& username, const QString& acc
             "    margin-top: 20px;"
             "}"
             "QPushButton:hover {"
-            "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-            "                stop:0 #5CBF60, stop:1 #55B059);"
-            "    transform: translateY(-2px);"
-            "    box-shadow: 0 4px 8px rgba(0,0,0,0.2);"
+            "    background-color: #5CBF60;"
             "}"
             "QPushButton:pressed {"
-            "    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, "
-            "                stop:0 #3E8E41, stop:1 #357A37);"
-            "    transform: translateY(1px);"
+            "    background-color: #3E8E41;"
             "}"
             "QPushButton:disabled {"
             "    background-color: #CCCCCC;"
@@ -338,30 +336,68 @@ PersonalMsgWindow::PersonalMsgWindow(const QString& username, const QString& acc
         sendUpdateRequest();
     }
 
-    void PersonalMsgWindow::sendUpdateRequest() {
-        QJsonObject request;
-        request["type"] = "updateUserInfo";
-        request["account"] = currentAccount;
-        request["nickname"] = nicknameEdit->text().trimmed();
-        request["oldPassword"] = oldPasswordEdit->text();
+void PersonalMsgWindow::onUserInfoUpdateResponse(const QJsonObject& response) {
+    // 重新启用确认按钮
+    confirmButton->setEnabled(true);
+    confirmButton->setText("🔄 确认修改");
 
-        // 只有在输入了新密码时才包含这个字段
-        if (!newPasswordEdit->text().isEmpty()) {
-            request["newPassword"] = newPasswordEdit->text();
+    QString status = response["status"].toString();
+    QString message = response["message"].toString();
+    bool success = (status == "success");
+
+    if (success) {
+        // 成功情况
+        QMessageBox::information(this, "成功", message);
+
+        // 更新本地用户信息
+        QString newUsername = response["username"].toString();
+        QString account = response["account"].toString();
+
+        if (!newUsername.isEmpty()) {
+            currentUsername = newUsername;
+            nicknameEdit->setText(newUsername);
+
+            // 通知主窗口更新用户名显示
+            emit userInfoUpdated(newUsername, account);
         }
 
-        // 发送请求
-        NetworkManager::instance()->sendMessage(request);
+        // 清空密码输入框
+        oldPasswordEdit->clear();
+        newPasswordEdit->clear();
+    } else {
+        // 失败情况
+        QMessageBox::warning(this, "更新失败", message);
 
-        // 禁用按钮防止重复提交
-        confirmButton->setEnabled(false);
-        confirmButton->setText("修改中...");
-
-        // 这里应该连接NetworkManager的响应信号来处理服务器回复
-        // 为了简化，暂时显示一个提示
-        QMessageBox::information(this, "提示", "修改请求已发送，请等待服务器响应");
-
-        // 重新启用按钮
-        confirmButton->setEnabled(true);
-        confirmButton->setText("确认修改");
+        // 根据错误类型给出相应的UI反馈
+        if (message.contains("账号、昵称和原密码不能为空")) {
+            nicknameEdit->setStyleSheet(nicknameEdit->styleSheet() + "border: 2px solid red;");
+            oldPasswordEdit->setStyleSheet(oldPasswordEdit->styleSheet() + "border: 2px solid red;");
+        } else if (message.contains("原密码不正确")) {
+            oldPasswordEdit->setStyleSheet(oldPasswordEdit->styleSheet() + "border: 2px solid red;");
+            oldPasswordEdit->setFocus();
+        }
     }
+}
+
+//发送更新请求到服务器
+void PersonalMsgWindow::sendUpdateRequest() {
+    QJsonObject request;
+    request["type"] = "updateUserInfo";
+    request["account"] = currentAccount;
+    request["nickname"] = nicknameEdit->text().trimmed();
+    request["oldPassword"] = oldPasswordEdit->text();
+
+    // 只有在输入了新密码时才包含这个字段
+    if (!newPasswordEdit->text().isEmpty()) {
+        request["newPassword"] = newPasswordEdit->text();
+    }
+
+    // 发送请求
+    NetworkManager::instance()->sendMessage(request);
+
+    // 禁用按钮，显示加载状态
+    confirmButton->setEnabled(false);
+    confirmButton->setText("⏳ 正在更新...");
+
+    qDebug() << "已发送用户信息更新请求";
+}

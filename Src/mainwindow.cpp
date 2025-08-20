@@ -76,8 +76,32 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "    background-color: #607D8B;"
         "    border-radius: 4px;"  // hover 状态也需要添加圆角
         "}"
+        "QPushButton:pressed {"
+        "    background-color: #455A64;"  // 更深的颜色
+        "    border-radius: 4px;"
+        "}"
     );
 
+    // 创建添加好友按钮
+    addFriendButton = new QPushButton("➕", this);
+    addFriendButton->setStyleSheet(
+        "QPushButton {"
+        "    background-color: transparent;"
+        "    color: #FFFFFF;"
+        "    border: none;"
+        "    padding: 5px 15px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: #607D8B;"
+        "    border-radius: 4px;"  // hover 状态也需要添加圆角
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: #455A64;"  // 更深的颜色
+        "    border-radius: 4px;"
+        "}"
+    );
+
+    topBarLayout->addWidget(addFriendButton);    // 添加好友按钮
     // 添加弹性空间和按钮
     topBarLayout->addWidget(settingsButton);
 
@@ -193,6 +217,11 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(messageInput, &QLineEdit::textChanged, this, &MainWindow::onMessageInputChanged);
     //个人信息按钮
     connect(personalMsgButton, &QPushButton::clicked, this, &MainWindow::onPersonalMsgButtonClicked);
+    // 连接添加好友按钮
+    connect(addFriendButton, &QPushButton::clicked, this, &MainWindow::onAddFriendButtonClicked);
+
+    // 初始化添加好友窗口为空指针
+    addFriendWindow = nullptr;
 
     // 新增：设置发送按钮初始状态为禁用
     sendButton->setEnabled(false);
@@ -268,11 +297,39 @@ void MainWindow::onPersonalMsgButtonClicked() {
     if (!personalMsgWindow) {
         // 传入当前用户的用户名和账号信息
         personalMsgWindow = new PersonalMsgWindow(currentUsername, currentAccount, this);
+        // 连接用户信息更新信号
+        connect(personalMsgWindow, &PersonalMsgWindow::userInfoUpdated,this, &MainWindow::onUserInfoUpdated);
     }
 
     personalMsgWindow->show();
     personalMsgWindow->raise(); // 确保窗口显示在最前面
     personalMsgWindow->activateWindow(); // 激活窗口
+}
+
+//个人信息更新
+void MainWindow::onUserInfoUpdated(const QString& newUsername, const QString& account) {
+    // 更新主窗口显示的用户名
+    currentUsername = newUsername;
+
+    qDebug() << "主窗口用户名已更新为：" << newUsername;
+    // 如果有显示用户名的UI元素，在这里更新
+    // 例如：userNameLabel->setText(newUsername);
+}
+
+//添加好友按钮
+void MainWindow::onAddFriendButtonClicked() {
+    if (!addFriendWindow) {
+        addFriendWindow = new AddFriendWindow(currentAccount, this);
+        connect(addFriendWindow, &AddFriendWindow::friendAdded,
+                this, [this](const QString& friendAccount, const QString& friendUsername) {
+                    qDebug() << "新增好友：" << friendUsername << "(" << friendAccount << ")";
+                    // 这里可以添加更新好友列表的逻辑
+                });
+    }
+
+    addFriendWindow->show();
+    addFriendWindow->raise();
+    addFriendWindow->activateWindow();
 }
 
 // 初始化用户列表
@@ -444,8 +501,11 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
         qDebug() << "收到未处理的消息类型:" << status;
     }
 
-    // 滚动到底部
-    chatDisplay->moveCursor(QTextCursor::End);
+    // 确保滚动到底部
+    QTextCursor cursor = chatDisplay->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    chatDisplay->setTextCursor(cursor);
+    chatDisplay->ensureCursorVisible();
 }
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
@@ -487,6 +547,12 @@ void MainWindow::sendMessageToServer(const QString &msg) {
                          .arg(timestamp)
                          .arg(currentUsername)
                          .arg(msg));
+
+    // 确保滚动到底部 - 使用多种方法确保生效
+    QTextCursor cursor = chatDisplay->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    chatDisplay->setTextCursor(cursor);
+    chatDisplay->ensureCursorVisible();
 }
 
 //处理公共聊天消息
@@ -508,6 +574,12 @@ void MainWindow::handlePublicChatMessage(const QString& username, const QString&
                          .arg(timestamp)
                          .arg(displayName)
                          .arg(content));
+
+    // 确保滚动到底部
+    QTextCursor cursor = chatDisplay->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    chatDisplay->setTextCursor(cursor);
+    chatDisplay->ensureCursorVisible();
 
     qDebug() << "显示并保存公共聊天消息 -" << displayName << ":" << content;
 }

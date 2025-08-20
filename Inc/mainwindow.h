@@ -7,6 +7,7 @@
 #define MAINWINDOW_H
 
 #include "chatdatabase.h"
+#include "addfriendwindow.h"
 #include <QWidget>
 #include <QLabel>      // 欢迎标签
 #include <QTextEdit>   // 用于显示聊天记录
@@ -47,6 +48,9 @@ private slots:
 
     //顶部栏个人信息设置
     void onPersonalMsgButtonClicked(); // 添加按钮点击槽函数=
+    //用户个人信息处理
+    void onUserInfoUpdated(const QString& newUsername, const QString& account);
+    void onAddFriendButtonClicked();     // 新增：添加好友按钮槽函数
 
 private:
     QTextEdit *chatDisplay;    // 显示聊天内容的区域
@@ -65,6 +69,9 @@ private:
     //顶部栏个人信息设置
     QPushButton *personalMsgButton; // 添加按钮成员变量
     PersonalMsgWindow *personalMsgWindow; // 添加窗口成员变量
+
+    QPushButton *addFriendButton;       // 添加好友按钮
+    AddFriendWindow *addFriendWindow;   // 添加好友窗口
 
     //用户列表相关函数
     void initializeUserList(); // 初始化用户列表

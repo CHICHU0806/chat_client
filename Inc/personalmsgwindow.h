@@ -20,11 +20,15 @@ class PersonalMsgWindow : public QDialog {
 public:
     explicit PersonalMsgWindow(const QString& username, const QString& account, QWidget *parent = nullptr);
     ~PersonalMsgWindow();
-private slots:
-    void onConfirmButtonClicked(); // 确认修改按钮点击槽函数
-    void setupRightWidget();
 
+private slots:
+    void setupRightWidget();
     void onAvatarButtonClicked();  // 头像按钮点击槽函数
+    void onConfirmButtonClicked(); // 确认修改按钮点击槽函数
+    void onUserInfoUpdateResponse(const QJsonObject& response);
+
+signals:
+    void userInfoUpdated(const QString& newUsername, const QString& account);
 
 private:
     void setupLeftWidget();
