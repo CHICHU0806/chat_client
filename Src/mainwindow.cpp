@@ -379,20 +379,6 @@ void MainWindow::initializeUserList() {
     // 设置默认选中公共聊天室
     userListWidget->setCurrentItem(publicItem);
 
-    // 模拟添加一些在线用户（后续从服务器获取）
-    QStringList mockUsers = {"用户1", "用户2", "用户3"};
-    for (const QString& username : mockUsers) {
-        QListWidgetItem* item = new QListWidgetItem("👤 " + username);
-        item->setData(Qt::UserRole, username);
-
-        // 设置普通用户的字体
-        QFont userFont;
-        userFont.setPointSize(10);
-        item->setFont(userFont);
-
-        userListWidget->addItem(item);
-    }
-
     qDebug() << "用户列表已初始化";
 }
 

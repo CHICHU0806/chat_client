@@ -14,8 +14,7 @@ AddFriendWindow::AddFriendWindow(const QString& currentAccount, QWidget *parent)
     setupUI();
 
     // 连接网络管理器信号
-    connect(NetworkManager::instance(), &NetworkManager::searchFriendResponse,
-            this, &AddFriendWindow::onSearchResponse);
+    connect(NetworkManager::instance(), &NetworkManager::searchFriendResponse,this, &AddFriendWindow::onSearchResponse);
 }
 
 AddFriendWindow::~AddFriendWindow() {
@@ -188,37 +187,51 @@ void AddFriendWindow::onSearchResponse(const QJsonObject& response) {
     searchButton->setText("🔍 搜索");
 
     QString status = response["status"].toString();
+    QString message = response["message"].toString();
+
     if (status == "success") {
-        QJsonArray users = response["users"].toArray();
-        if (users.isEmpty()) {
-            statusLabel->setText("未找到匹配的用户");
+        // 成功找到用户
+        QJsonObject userInfo = response["userInfo"].toObject();
+        QString account = userInfo["account"].toString();
+        QString username = userInfo["username"].toString();
+        bool isOnline = userInfo["isOnline"].toBool();
+
+        // 不显示自己（双重保险，虽然服务器应该已经处理）
+        if (account == currentAccount) {
+            statusLabel->setText("不能添加自己为好友");
             return;
         }
 
         searchResultList->clear();
-        for (const auto& userValue : users) {
-            QJsonObject user = userValue.toObject();
-            QString account = user["account"].toString();
-            QString username = user["username"].toString();
 
-            // 不显示自己
-            if (account == currentAccount) {
-                continue;
-            }
-
-            QListWidgetItem* item = new QListWidgetItem(QString("%1 - %2").arg(username, account));
-            item->setData(Qt::UserRole, account);
-            searchResultList->addItem(item);
-        }
-
-        if (searchResultList->count() == 0) {
-            statusLabel->setText("未找到其他用户");
+        // 创建显示项
+        QString displayText = QString("%1 - %2").arg(username, account);
+        if (isOnline) {
+            displayText += " (在线)";
         } else {
-            statusLabel->setText(QString("找到 %1 个用户").arg(searchResultList->count()));
+            displayText += " (离线)";
         }
+
+        QListWidgetItem* item = new QListWidgetItem(displayText);
+        item->setData(Qt::UserRole, account);
+        searchResultList->addItem(item);
+
+        statusLabel->setText("找到用户，点击选择后可添加好友");
     } else {
-        QString message = response["message"].toString();
-        statusLabel->setText("搜索失败: " + message);
+        // 错误情况
+        searchResultList->clear();
+        addFriendButton->setEnabled(false);
+
+        // 根据不同的错误消息设置状态
+        if (message.contains("不能添加自己为好友")) {
+            statusLabel->setText("❌ 不能添加自己为好友");
+        } else if (message.contains("用户不存在")) {
+            statusLabel->setText("❌ 该账号不存在");
+        } else if (message.contains("当前用户不存在")) {
+            statusLabel->setText("❌ 搜索失败：当前用户不存在");
+        } else {
+            statusLabel->setText("❌ 搜索失败: " + message);
+        }
     }
 }
 

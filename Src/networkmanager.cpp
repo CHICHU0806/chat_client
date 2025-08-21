@@ -87,6 +87,9 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "updateUserInfo") {
         emit userInfoUpdateResponse(response);
     }
+    else if (type == "searchFriend") {
+        emit searchFriendResponse(response);
+    }
     else if (type == "addFriend") {
         emit addFriendResponse(response);
     }
