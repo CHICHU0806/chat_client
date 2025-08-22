@@ -6,7 +6,6 @@
 #include "personalmsgwindow.h"
 #include <qboxlayout> // 用于布局
 #include <QHostAddress> // 用于 QTcpSocket
-#include <QJsonDocument> // 用于 JSON 处理
 #include <QJsonArray>
 #include <QJsonObject>   // 用于 JSON 处理
 #include <QDateTime>     // 用于显示消息时间
@@ -143,10 +142,12 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
 
     chatDisplay = new QTextEdit(centerWidget);
     chatDisplay->setReadOnly(true);
+    chatDisplay->setTextInteractionFlags(Qt::TextSelectableByMouse);
     chatDisplay->setStyleSheet(
         "QTextEdit {"
         "    border: none;"
-        "    background-color: #6690A0;"
+        "    background-color: #F0F0F0;"  // 改为浅色背景，让气泡更清晰
+        "    padding: 10px;"
         "}"
     );
 
@@ -496,121 +497,128 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
 void MainWindow::sendMessageToServer(const QString &msg) {
-    QJsonObject request;
-    request["type"] = "chatMessage";
-    request["account"] = currentAccount;
-    request["content"] = msg;
+    // 构建聊天消息的JSON对象
+    QJsonObject message;
+    message["type"] = "chatMessage";
+    message["username"] = currentUsername;
+    message["content"] = msg;
+    message["chatType"] = "public";
+    message["account"] = currentAccount;
 
-    QString chatType;
-    QString chatTarget;
+    // 发送到服务器
+    NetworkManager::instance()->sendMessage(message);
 
-    QListWidgetItem* currentItem = userListWidget->currentItem();
-    if (currentItem && currentItem->data(Qt::UserRole).toString() == "PUBLIC") {
-        request["messageType"] = "public";
-        chatType = "public";
-        chatTarget = "PUBLIC";
-    } else if (currentItem) {
-        request["messageType"] = "private";
-        request["targetAccount"] = currentItem->data(Qt::UserRole).toString();
-        chatType = "private";
-        chatTarget = currentItem->data(Qt::UserRole).toString();
-    } else {
-        request["messageType"] = "public";
-        chatType = "public";
-        chatTarget = "PUBLIC";
-    }
-
-    NetworkManager::instance()->sendMessage(request);
-
-    // 保存自己发送的消息到数据库
-    saveChatMessage(chatType, chatTarget, currentAccount, currentUsername, msg, true);
-
-    qInfo() << "已发送聊天消息：" << msg;
-
+    // 立即显示自己的消息到聊天区域
     QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
-    chatDisplay->append("<br>");
-    chatDisplay->append(QString("<font color='blue'>[%1] <b>%2:</b> %3</font>")
-                         .arg(timestamp)
-                         .arg(currentUsername)
-                         .arg(msg));
 
-    // 确保滚动到底部 - 使用多种方法确保生效
+    // 使用table布局实现右对齐 - 自己的消息
+    QString bubbleHtml = QString(
+        "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+        "<tr><td style='text-align: right; vertical-align: top;'>"
+        "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
+        "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+        "<div><span style='background-color: #1E90FF; color: white; border-radius: 12px; "
+        "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+        "text-align: right; display: inline-block; white-space: pre-wrap; "
+        "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+        "</div></td></tr></table>"
+    ).arg(currentUsername, timestamp, msg.toHtmlEscaped());
+
     QTextCursor cursor = chatDisplay->textCursor();
     cursor.movePosition(QTextCursor::End);
+    cursor.insertHtml(bubbleHtml);
     chatDisplay->setTextCursor(cursor);
     chatDisplay->ensureCursorVisible();
+
+    // 保存到数据库
+    saveChatMessage("public", "PUBLIC", currentAccount, currentUsername, msg, true);
+
+    // 清空输入框
+    messageInput->clear();
+    sendButton->setEnabled(false);
 }
 
 //处理公共聊天消息
 void MainWindow::handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp) {
-    QListWidgetItem* currentItem = userListWidget->currentItem();
-    if (!currentItem || currentItem->data(Qt::UserRole).toString() != "PUBLIC") {
-        // 即使不在当前窗口也要保存消息
-        saveChatMessage("public", "PUBLIC", "", username, content, false);
-        qDebug() << "当前不在公共聊天室，消息已保存但不显示";
-        return;
-    }
+    QString displayName = (username == currentUsername) ? "我" : username;
 
-    // 保存消息到数据库
-    saveChatMessage("public", "PUBLIC", "", username, content, false);
+    // 使用table布局实现左对齐 - 别人的消息
+    QString bubbleHtml = QString(
+        "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+        "<tr><td style='text-align: left; vertical-align: top;'>"
+        "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
+        "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+        "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 12px; "
+        "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+        "text-align: left; display: inline-block; white-space: pre-wrap; "
+        "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+        "</div></td></tr></table>"
+    ).arg(displayName, timestamp, content.toHtmlEscaped());
 
-    QString displayName = username.isEmpty() ? "匿名用户" : username;
-    chatDisplay->append("<br>");
-    chatDisplay->append(QString("<font color='green'>[%1] <b>%2:</b> %3</font>")
-                         .arg(timestamp)
-                         .arg(displayName)
-                         .arg(content));
-
-    // 确保滚动到底部
     QTextCursor cursor = chatDisplay->textCursor();
     cursor.movePosition(QTextCursor::End);
+    cursor.insertHtml(bubbleHtml);
     chatDisplay->setTextCursor(cursor);
     chatDisplay->ensureCursorVisible();
 
-    qDebug() << "显示并保存公共聊天消息 -" << displayName << ":" << content;
+    // 保存到数据库
+    saveChatMessage("public", "PUBLIC", username, username, content, username == currentUsername);
 }
 
 //聊天记录加载
 void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTarget) {
-    // 限制加载最近30条记录
-    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, 30);
-
+    // 清空聊天显示区域
     chatDisplay->clear();
 
-    if (chatType == "public") {
-        chatDisplay->append("<font color='green'>--- 欢迎来到公共聊天室 ---</font>");
-    } else {
-        chatDisplay->append(QString("<font color='blue'>--- 与 %1 的私聊 ---</font>").arg(chatTarget));
-    }
+    // 从数据库加载聊天记录
+    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, 30);
 
-    // 检查是否还有更多历史记录
-    QList<ChatMessage> allMessages = ChatDatabase::instance()->getMessages(chatType, chatTarget, 1000);
-    bool hasMoreHistory = allMessages.size() > 30;
+    qDebug() << "加载聊天记录 - 类型:" << chatType << "目标:" << chatTarget;
+    qDebug() << "当前聊天记录数量:" << messages.size();
 
-    if (hasMoreHistory) {
-        chatDisplay->append("<font color='#0066CC'><u>点击这里加载更多历史记录...</u></font>");
-    }
-
-    // 显示历史消息
-    for (const ChatMessage& msg : messages) {
-        QString displayTime = msg.timestamp.toString("MM-dd hh:mm:ss");
-        QString color = msg.isSelf ? "blue" : "green";
-
-        chatDisplay->append("<br>");
-        chatDisplay->append(QString("<font color='%1'>[%2] <b>%3:</b> %4</font>")
-                             .arg(color)
-                             .arg(displayTime)
-                             .arg(msg.senderUsername)
-                             .arg(msg.content));
-    }
-
-    // 确保滚动到底部（显示最新消息）
+    // 使用HTML格式显示历史消息
     QTextCursor cursor = chatDisplay->textCursor();
     cursor.movePosition(QTextCursor::End);
+
+    for (const auto& message : messages) {
+        QString bubbleHtml;
+        QString timestamp = message.timestamp.toString("hh:mm:ss");
+
+        if (message.isSelf) {
+            // 自己的消息（右对齐，昵称时间戳同行，文本换行）
+            bubbleHtml = QString(
+                "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+                "<tr><td style='text-align: right; vertical-align: top;'>"
+                "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
+                "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+                "<div><span style='background-color: #1E90FF; color: white; border-radius: 12px; "
+                "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                "text-align: right; display: inline-block; white-space: pre-wrap; "
+                "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+                "</div></td></tr></table>"
+            ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
+        } else {
+            // 别人的消息（左对齐，昵称时间戳同行，文本换行）
+            bubbleHtml = QString(
+                "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+                "<tr><td style='text-align: left; vertical-align: top;'>"
+                "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
+                "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+                "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 12px; "
+                "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                "text-align: left; display: inline-block; white-space: pre-wrap; "
+                "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+                "</div></td></tr></table>"
+            ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
+        }
+        cursor.insertHtml(bubbleHtml);
+    }
+
+    // 设置光标到末尾并滚动
     chatDisplay->setTextCursor(cursor);
     chatDisplay->ensureCursorVisible();
 
-    qDebug() << "已加载" << messages.size() << "条历史记录，总共有" << allMessages.size() << "条记录";
+    qDebug() << "已加载" << messages.size() << "条历史记录";
 }
 
 // 保存聊天消息到数据库
