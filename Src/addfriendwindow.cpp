@@ -9,7 +9,8 @@
 #include <QListWidgetItem>
 
 AddFriendWindow::AddFriendWindow(const QString& currentAccount, QWidget *parent)
-    : QDialog(parent), currentAccount(currentAccount)
+    : QDialog(parent),
+      currentAccount(currentAccount)
 {
     setupUI();
 
@@ -70,13 +71,16 @@ void AddFriendWindow::setupUI() {
         "QListWidget::item {"
         "    padding: 12px;"
         "    border-bottom: 1px solid #F0F0F0;"
+        "    color: #333333;"  // 修改：设置未选中时的文字为黑色
+        "    background-color: transparent;"
         "}"
         "QListWidget::item:hover {"
         "    background-color: #F5F5F5;"
+        "    color: #333333;"  // 修改：悬停时文字保持黑色
         "}"
         "QListWidget::item:selected {"
-        "    background-color: #E3F2FD;"
-        "    color: #1976D2;"
+        "    background-color: #CECBCC;"  // 修改：选中时背景为深色
+        "    color: #333333;"  // 修改：选中时文字为白色
         "}"
         "QLabel {"
         "    color: #FFFFFF;"
@@ -176,7 +180,7 @@ void AddFriendWindow::onAddFriendButtonClicked() {
                                    QMessageBox::Yes | QMessageBox::No);
     if (ret == QMessageBox::Yes) {
         addFriendButton->setEnabled(false);
-        addFriendButton->setText("⏳ 添加中...");
+        addFriendButton->setText("好友申请已发送");
         sendAddFriendRequest(selectedFriendAccount);
     }
 }

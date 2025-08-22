@@ -21,6 +21,7 @@
 #include <QSplitter>
 #include <QMessageBox>
 #include "chatdatabase.h"
+#include "FriendListWindow.h"
 
 class PersonalMsgWindow; //声明
 
@@ -50,7 +51,10 @@ private slots:
     void onPersonalMsgButtonClicked(); // 添加按钮点击槽函数=
     //用户个人信息处理
     void onUserInfoUpdated(const QString& newUsername, const QString& account);
+
     void onAddFriendButtonClicked();     // 新增：添加好友按钮槽函数
+
+    void onFriendListButtonClicked();    // 好友列表按钮槽函数
 
 private:
     QTextEdit *chatDisplay;    // 显示聊天内容的区域
@@ -72,6 +76,8 @@ private:
 
     QPushButton *addFriendButton;       // 添加好友按钮
     AddFriendWindow *addFriendWindow;   // 添加好友窗口
+    QPushButton *friendListButton;      // 好友列表按钮
+    FriendListWindow *friendListWindow;    // 好友列表窗口
 
     //用户列表相关函数
     void initializeUserList(); // 初始化用户列表

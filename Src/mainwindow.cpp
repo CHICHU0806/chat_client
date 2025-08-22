@@ -4,6 +4,7 @@
 #include "mainwindow.h"
 #include "networkmanager.h"
 #include "personalmsgwindow.h"
+#include "FriendListWindow.h"
 #include <qboxlayout> // 用于布局
 #include <QHostAddress> // 用于 QTcpSocket
 #include <QJsonArray>
@@ -101,6 +102,28 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     );
 
     topBarLayout->addWidget(addFriendButton);    // 添加好友按钮
+
+    // 创建好友列表按钮
+    friendListButton = new QPushButton("👥", this);
+    friendListButton->setStyleSheet(
+        "QPushButton {"
+        "    background-color: transparent;"
+        "    color: #FFFFFF;"
+        "    border: none;"
+        "    padding: 5px 15px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: #607D8B;"
+        "    border-radius: 4px;"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: #455A64;"
+        "    border-radius: 4px;"
+        "}"
+    );
+
+    topBarLayout->addWidget(friendListButton);   // 添加好友列表按钮
+
     // 添加弹性空间和按钮
     topBarLayout->addWidget(settingsButton);
 
@@ -146,7 +169,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     chatDisplay->setStyleSheet(
         "QTextEdit {"
         "    border: none;"
-        "    background-color: #F0F0F0;"  // 改为浅色背景，让气泡更清晰
+        "    background-color: #6690A0;"
         "    padding: 10px;"
         "}"
     );
@@ -220,9 +243,14 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(personalMsgButton, &QPushButton::clicked, this, &MainWindow::onPersonalMsgButtonClicked);
     // 连接添加好友按钮
     connect(addFriendButton, &QPushButton::clicked, this, &MainWindow::onAddFriendButtonClicked);
+    // 连接好友列表按钮
+    connect(friendListButton, &QPushButton::clicked, this, &MainWindow::onFriendListButtonClicked);
 
     // 初始化添加好友窗口为空指针
     addFriendWindow = nullptr;
+
+    // 初始化：
+    friendListWindow = nullptr;
 
     // 新增：设置发送按钮初始状态为禁用
     sendButton->setEnabled(false);
@@ -331,6 +359,22 @@ void MainWindow::onAddFriendButtonClicked() {
     addFriendWindow->show();
     addFriendWindow->raise();
     addFriendWindow->activateWindow();
+}
+
+// 好友列表按钮
+void MainWindow::onFriendListButtonClicked() {
+    if (!friendListWindow) {
+        friendListWindow = new FriendListWindow(currentAccount, this);
+        connect(friendListWindow, &FriendListWindow::friendSelected,
+                this, [this](const QString& friendAccount, const QString& friendUsername) {
+                    qDebug() << "选择好友进行聊天：" << friendUsername << "(" << friendAccount << ")";
+                    // 这里可以添加切换到私聊的逻辑
+                });
+    }
+
+    friendListWindow->show();
+    friendListWindow->raise();
+    friendListWindow->activateWindow();
 }
 
 // 初始化用户列表
@@ -517,8 +561,8 @@ void MainWindow::sendMessageToServer(const QString &msg) {
         "<tr><td style='text-align: right; vertical-align: top;'>"
         "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
         "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-        "<div><span style='background-color: #1E90FF; color: white; border-radius: 12px; "
-        "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+        "<div><span style='background-color: #1E90FF; color: white; border-radius: 18px; "
+        "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
         "text-align: right; display: inline-block; white-space: pre-wrap; "
         "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
         "</div></td></tr></table>"
@@ -548,8 +592,8 @@ void MainWindow::handlePublicChatMessage(const QString& username, const QString&
         "<tr><td style='text-align: left; vertical-align: top;'>"
         "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
         "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-        "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 12px; "
-        "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+        "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
+        "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
         "text-align: left; display: inline-block; white-space: pre-wrap; "
         "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
         "</div></td></tr></table>"
@@ -585,27 +629,27 @@ void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTar
         QString timestamp = message.timestamp.toString("hh:mm:ss");
 
         if (message.isSelf) {
-            // 自己的消息（右对齐，昵称时间戳同行，文本换行）
+            // 自己的消息（右对齐，更大的内边距和圆角）
             bubbleHtml = QString(
                 "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
                 "<tr><td style='text-align: right; vertical-align: top;'>"
                 "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
                 "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-                "<div><span style='background-color: #1E90FF; color: white; border-radius: 12px; "
-                "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                "<div><span style='background-color: #1E90FF; color: white; border-radius: 25px; "
+                "padding: 12px 20px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
                 "text-align: right; display: inline-block; white-space: pre-wrap; "
                 "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
                 "</div></td></tr></table>"
             ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
         } else {
-            // 别人的消息（左对齐，昵称时间戳同行，文本换行）
+            // 别人的消息（左对齐，更大的内边距和圆角）
             bubbleHtml = QString(
                 "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
                 "<tr><td style='text-align: left; vertical-align: top;'>"
                 "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
                 "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-                "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 12px; "
-                "padding: 8px 12px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
+                "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
                 "text-align: left; display: inline-block; white-space: pre-wrap; "
                 "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
                 "</div></td></tr></table>"
