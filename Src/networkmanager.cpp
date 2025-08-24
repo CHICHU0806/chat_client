@@ -93,6 +93,9 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "addFriend") {
         emit addFriendResponse(response);
     }
+    else if (type == "offline_messages") {
+        emit offlineMessagesReceived(response);
+    }
     else {
         qDebug() << "未知消息类型：" << type;
     }

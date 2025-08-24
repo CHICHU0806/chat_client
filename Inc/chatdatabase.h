@@ -29,9 +29,12 @@ public:
     // 数据库操作
     bool initDatabase(const QString& currentAccount);
     bool saveMessage(const ChatMessage& message);
-    QList<ChatMessage> getMessages(const QString& chatType, const QString& chatTarget, int limit = 50);
-    QList<ChatMessage> getRecentMessages(const QString& chatType, const QString& chatTarget, int limit = 20);
+    QList<ChatMessage> getMessages(const QString& chatType, const QString& chatTarget, int limit, int offset = 0);
+    QList<ChatMessage> getRecentMessages(const QString& chatType, const QString& chatTarget, int limit, int offset = 0);
     bool clearMessages(const QString& chatType, const QString& chatTarget = QString());
+
+    //获取消息总数
+    int getMessageCount(const QString& chatType, const QString& chatTarget);
 
 private:
     explicit ChatDatabase(QObject* parent = nullptr);

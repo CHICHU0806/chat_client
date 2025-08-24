@@ -95,52 +95,41 @@ bool ChatDatabase::saveMessage(const ChatMessage& message) {
     return true;
 }
 
-QList<ChatMessage> ChatDatabase::getMessages(const QString& chatType, const QString& chatTarget, int limit) {
+QList<ChatMessage> ChatDatabase::getMessages(const QString& chatType, const QString& chatTarget, int limit, int offset) {
     QList<ChatMessage> messages;
-    
-    if (!m_database.isOpen()) {
-        qWarning() << "数据库未打开";
-        return messages;
-    }
-    
+
     QSqlQuery query(m_database);
-    query.prepare(R"(
-        SELECT id, chat_type, chat_target, sender_account, sender_username, 
-               content, timestamp, is_self
-        FROM chat_messages 
-        WHERE chat_type = ? AND chat_target = ?
-        ORDER BY timestamp DESC
-        LIMIT ?
-    )");
-    
+    query.prepare("SELECT sender_account, sender_username, content, timestamp, is_self "
+                  "FROM chat_messages "
+                  "WHERE chat_type = ? AND chat_target = ? "
+                  "ORDER BY timestamp DESC "
+                  "LIMIT ? OFFSET ?");
+
     query.addBindValue(chatType);
     query.addBindValue(chatTarget);
     query.addBindValue(limit);
-    
-    if (!query.exec()) {
-        qWarning() << "查询消息失败:" << query.lastError().text();
-        return messages;
+    query.addBindValue(offset);
+
+    if (query.exec()) {
+        while (query.next()) {
+            ChatMessage msg;
+            msg.chatType = chatType;
+            msg.chatTarget = chatTarget;
+            msg.senderAccount = query.value(0).toString();
+            msg.senderUsername = query.value(1).toString();
+            msg.content = query.value(2).toString();
+            msg.timestamp = query.value(3).toDateTime();
+            msg.isSelf = query.value(4).toBool();
+            messages.append(msg);
+        }
+        // 反转列表，使最旧的消息在前
+        std::reverse(messages.begin(), messages.end());
     }
-    
-    while (query.next()) {
-        ChatMessage msg;
-        msg.id = query.value("id").toInt();
-        msg.chatType = query.value("chat_type").toString();
-        msg.chatTarget = query.value("chat_target").toString();
-        msg.senderAccount = query.value("sender_account").toString();
-        msg.senderUsername = query.value("sender_username").toString();
-        msg.content = query.value("content").toString();
-        msg.timestamp = query.value("timestamp").toDateTime();
-        msg.isSelf = query.value("is_self").toBool();
-        
-        messages.prepend(msg); // 保持时间顺序
-    }
-    
+
     return messages;
 }
-
-QList<ChatMessage> ChatDatabase::getRecentMessages(const QString& chatType, const QString& chatTarget, int limit) {
-    return getMessages(chatType, chatTarget, limit);
+QList<ChatMessage> ChatDatabase::getRecentMessages(const QString& chatType, const QString& chatTarget, int limit, int offset) {
+    return getMessages(chatType, chatTarget, limit , offset);
 }
 
 bool ChatDatabase::clearMessages(const QString& chatType, const QString& chatTarget) {
@@ -168,4 +157,18 @@ bool ChatDatabase::clearMessages(const QString& chatType, const QString& chatTar
     }
     
     return true;
+}
+
+int ChatDatabase::getMessageCount(const QString& chatType, const QString& chatTarget) {
+    QSqlQuery query(m_database);
+    query.prepare("SELECT COUNT(*) FROM chat_messages WHERE chat_type = ? AND chat_target = ?");
+    query.addBindValue(chatType);
+    query.addBindValue(chatTarget);
+
+    if (query.exec() && query.next()) {
+        return query.value(0).toInt();
+    }
+
+    qWarning() << "获取消息数量失败:" << query.lastError().text();
+    return 0;
 }

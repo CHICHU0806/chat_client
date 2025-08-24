@@ -56,6 +56,9 @@ private slots:
 
     void onFriendListButtonClicked();    // 好友列表按钮槽函数
 
+    //离线消息处理
+    void handleOfflineMessages(const QJsonObject& response);
+
 private:
     QTextEdit *chatDisplay;    // 显示聊天内容的区域
     QLineEdit *messageInput;   // 消息输入框
@@ -79,6 +82,15 @@ private:
     QPushButton *friendListButton;      // 好友列表按钮
     FriendListWindow *friendListWindow;    // 好友列表窗口
 
+    // 聊天记录加载相关
+    QString currentChatType;     // 当前聊天类型
+    QString currentChatTarget;   // 当前聊天目标
+    QString formatMessage(const ChatMessage& msg);
+    int loadedMessageCount;      // 已加载的消息数量
+    bool isLoadingHistory;       // 是否正在加载历史记录
+
+    bool isOfflineMessagesProcessed;  // 离线消息是否已处理完成
+
     //用户列表相关函数
     void initializeUserList(); // 初始化用户列表
     void updateUserList(const QJsonArray& users); // 更新在线用户列表
@@ -86,11 +98,25 @@ private:
 
     // 辅助函数
     void handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp);//处理公共聊天消息
+    void handlePrivateChatMessage(const QString& username, const QString& content, const QString& timestamp);//私聊
     void sendMessageToServer(const QString &msg);
 
     // 聊天记录相关方法
     void loadChatHistory(const QString& chatType, const QString& chatTarget);
     void saveChatMessage(const QString& chatType, const QString& chatTarget, const QString& senderAccount, const QString& senderUsername, const QString& content, bool isSelf = false);
+
+    // 滚动条相关方法
+    void setupScrollBarConnection();
+    void loadMoreHistory();
+    bool hasMoreHistory() const;
+    void displayMessages(const QList<ChatMessage>& messages);
+    void scrollToBottom();
+
+    void requestOfflineMessages();  // 请求离线消息
+    void handleOfflinePublicMessageDirect(const QString& senderAccount, const QString& senderUsername,
+                                    const QString& content, const QString& timestamp);
+    void handleOfflinePrivateMessageDirect(const QString& senderAccount, const QString& senderUsername,
+                                         const QString& content, const QString& timestamp);
 };
 
 #endif // MAINWINDOW_H

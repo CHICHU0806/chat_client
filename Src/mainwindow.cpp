@@ -10,6 +10,8 @@
 #include <QJsonArray>
 #include <QJsonObject>   // 用于 JSON 处理
 #include <QDateTime>     // 用于显示消息时间
+#include <QScrollBar>   // 用于滚动条控制
+#include <QTimer>
 
 // 构造函数
 MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString& account, QWidget *parent)
@@ -174,6 +176,14 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "}"
     );
 
+    setupScrollBarConnection();
+
+    // 初始化聊天记录相关变量
+    currentChatType = "public";
+    currentChatTarget = "PUBLIC";
+    loadedMessageCount = 0;
+    isLoadingHistory = false;
+
     // 创建输入区域
     QWidget *inputArea = new QWidget(centerWidget);
     QHBoxLayout *inputLayout = new QHBoxLayout(inputArea);
@@ -266,9 +276,15 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     //连接networkmanager的信号
     auto* network = NetworkManager::instance();
     connect(network, &NetworkManager::chatMessageReceived, this, &MainWindow::handleChatMessage);
-
+    connect(network, &NetworkManager::offlineMessagesReceived, this, &MainWindow::handleOfflineMessages);
     //自动加载公共聊天室的历史记录（默认选中的是公共聊天室）
-    loadChatHistory("public", "PUBLIC");
+    //loadChatHistory("public", "PUBLIC");
+
+    QTimer::singleShot(1000, this, [this]() {
+        requestOfflineMessages();
+    });
+
+    isOfflineMessagesProcessed = false;
 
     qDebug() << "MainWindow initialized with shared socket.";
 }
@@ -375,6 +391,22 @@ void MainWindow::onFriendListButtonClicked() {
     friendListWindow->show();
     friendListWindow->raise();
     friendListWindow->activateWindow();
+}
+
+//离线消息处理
+void MainWindow::handleOfflineMessages(const QJsonObject& response) {
+    qDebug() << "=== 开始处理离线消息响应 ===";
+    qDebug() << "收到离线消息响应:" << response;
+
+    // 注意：实际的离线消息是通过 chatMessage 类型的消息推送的
+    // 这个函数主要用于标记离线消息处理完成和触发界面刷新
+
+    isOfflineMessagesProcessed = true;
+
+    qDebug() << "离线消息处理完成，重新加载聊天历史";
+    loadChatHistory("public", "PUBLIC");
+
+    qDebug() << "=== 离线消息处理结束 ===";
 }
 
 // 初始化用户列表
@@ -488,6 +520,15 @@ void MainWindow::requestUserList() {
 
 // 处理接收到的聊天消息
 void MainWindow::handleChatMessage(const QJsonObject& message) {
+    qDebug() << "=== handleChatMessage 调试信息 ===";
+    qDebug() << "当前用户账号:" << currentAccount;
+    qDebug() << "当前用户名:" << currentUsername;
+    qDebug() << "消息发送者账号:" << message["sender"].toString();
+    qDebug() << "消息发送者用户名:" << message["username"].toString();
+    qDebug() << "消息内容:" << message["content"].toString();
+    qDebug() << "消息类型:" << message["type"].toString();
+    qDebug() << "消息状态:" << message["status"].toString();
+
     QString type = message["type"].toString();
     QString status = message["status"].toString();
     QString sender = message["sender"].toString();        // 账号
@@ -502,8 +543,44 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
 
     // 只处理聊天消息
     if (type != "chatMessage") {
+        qDebug() << "不是聊天消息，忽略";
         return;
     }
+
+    // 关键调试：检查这里的判断
+    qDebug() << "sender == currentAccount?" << (sender == currentAccount);
+    if (sender == currentAccount) {
+        qDebug() << "是自己发送的消息，跳过显示";
+        return;
+    }
+
+    // 处理离线消息：不跳过自己的消息，因为离线消息需要保存和显示
+    if (status == "offline_broadcast" || status == "offline_private") {
+        qDebug() << "处理离线消息，状态:" << status;
+
+        // 离线消息直接保存到数据库，不立即显示
+        ChatMessage msg;
+        msg.senderAccount = sender;
+        msg.senderUsername = username;
+        msg.content = content;
+        msg.timestamp = QDateTime::fromString(timestamp, Qt::ISODate);
+        msg.isSelf = (sender == currentAccount);
+
+        if (status == "offline_broadcast") {
+            msg.chatType = "public";
+            msg.chatTarget = "PUBLIC";
+        } else if (status == "offline_private") {
+            msg.chatType = "private";
+            msg.chatTarget = message["target"].toString();
+        }
+
+        bool saved = ChatDatabase::instance()->saveMessage(msg);
+        qDebug() << "保存离线消息结果:" << saved << "内容:" << content.left(20);
+
+        return; // 离线消息不立即显示，等待统一加载
+    }
+
+    qDebug() << "准备显示其他人的消息";
 
     // 处理时间戳格式（从ISO格式转换为显示格式）
     QString displayTime;
@@ -518,18 +595,15 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
         displayTime = QDateTime::currentDateTime().toString("hh:mm:ss");
     }
 
-    // 如果是自己发送的消息，不重复显示（因为在sendMessageToServer中已经显示了）
-    if (sender == currentAccount) {
-        return;
-    }
-
     // 根据status处理不同类型的消息
     if (status == "broadcast") {
-        // 处理公共聊天室消息
         handlePublicChatMessage(username, content, displayTime);
-    } else {
-        // 处理其他类型消息（如私聊等）
-        qDebug() << "收到未处理的消息类型:" << status;
+        // 保存到数据库
+        saveChatMessage("public", "PUBLIC", sender, username, content, false);
+    } else if (status == "private") {
+        handlePrivateChatMessage(username, content, displayTime);
+        // 保存到数据库
+        saveChatMessage("private", message["target"].toString(), sender, username, content, false);
     }
 
     // 确保滚动到底部
@@ -609,61 +683,104 @@ void MainWindow::handlePublicChatMessage(const QString& username, const QString&
     saveChatMessage("public", "PUBLIC", username, username, content, username == currentUsername);
 }
 
-//聊天记录加载
-void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTarget) {
-    // 清空聊天显示区域
-    chatDisplay->clear();
+//处理私聊消息
+void MainWindow::handlePrivateChatMessage(const QString& username, const QString& content, const QString& timestamp) {
+    QString displayName = username;
 
-    // 从数据库加载聊天记录
-    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, 30);
+    // 使用与公共消息相同的左对齐气泡样式
+    QString bubbleHtml = QString(
+        "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+        "<tr><td style='text-align: left; vertical-align: top;'>"
+        "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
+        "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+        "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
+        "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+        "text-align: left; display: inline-block; white-space: pre-wrap; "
+        "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+        "</div></td></tr></table>"
+    ).arg(displayName, timestamp, content.toHtmlEscaped());
 
-    qDebug() << "加载聊天记录 - 类型:" << chatType << "目标:" << chatTarget;
-    qDebug() << "当前聊天记录数量:" << messages.size();
-
-    // 使用HTML格式显示历史消息
     QTextCursor cursor = chatDisplay->textCursor();
     cursor.movePosition(QTextCursor::End);
-
-    for (const auto& message : messages) {
-        QString bubbleHtml;
-        QString timestamp = message.timestamp.toString("hh:mm:ss");
-
-        if (message.isSelf) {
-            // 自己的消息（右对齐，更大的内边距和圆角）
-            bubbleHtml = QString(
-                "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
-                "<tr><td style='text-align: right; vertical-align: top;'>"
-                "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
-                "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-                "<div><span style='background-color: #1E90FF; color: white; border-radius: 25px; "
-                "padding: 12px 20px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-                "text-align: right; display: inline-block; white-space: pre-wrap; "
-                "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
-                "</div></td></tr></table>"
-            ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
-        } else {
-            // 别人的消息（左对齐，更大的内边距和圆角）
-            bubbleHtml = QString(
-                "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
-                "<tr><td style='text-align: left; vertical-align: top;'>"
-                "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
-                "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-                "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
-                "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-                "text-align: left; display: inline-block; white-space: pre-wrap; "
-                "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
-                "</div></td></tr></table>"
-            ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
-        }
-        cursor.insertHtml(bubbleHtml);
-    }
-
-    // 设置光标到末尾并滚动
+    cursor.insertHtml(bubbleHtml);
     chatDisplay->setTextCursor(cursor);
     chatDisplay->ensureCursorVisible();
 
-    qDebug() << "已加载" << messages.size() << "条历史记录";
+    saveChatMessage("private", "PRIVATE", username, username, content, username == currentUsername);//保存
 }
+
+
+//聊天记录加载
+void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTarget) {
+        qDebug() << "=== loadChatHistory 开始 ===";
+        qDebug() << "聊天类型:" << chatType << "聊天目标:" << chatTarget;
+
+        // 更新当前聊天信息
+        currentChatType = chatType;
+        currentChatTarget = chatTarget;
+        loadedMessageCount = 0;
+        isLoadingHistory = false;
+
+        // 清空聊天显示区域
+        chatDisplay->clear();
+
+        // 增加加载数量以确保包含所有离线消息
+        QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, 100);
+
+        loadedMessageCount = messages.size();
+
+        qDebug() << "从本地数据库加载了" << messages.size() << "条历史记录";
+
+        if (messages.isEmpty()) {
+            qDebug() << "没有历史记录可显示";
+            return;
+        }
+
+        // 直接在这里显示消息
+        QTextCursor cursor = chatDisplay->textCursor();
+        cursor.movePosition(QTextCursor::End);
+
+        for (const auto& message : messages) {
+            QString bubbleHtml;
+            QString timestamp = message.timestamp.toString("hh:mm:ss");
+
+            if (message.isSelf) {
+                // 自己的消息（右对齐）
+                bubbleHtml = QString(
+                    "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+                    "<tr><td style='text-align: right; vertical-align: top;'>"
+                    "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
+                    "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+                    "<div><span style='background-color: #1E90FF; color: white; border-radius: 25px; "
+                    "padding: 12px 20px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                    "text-align: right; display: inline-block; white-space: pre-wrap; "
+                    "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+                    "</div></td></tr></table>"
+                ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
+            } else {
+                // 别人的消息（左对齐）
+                bubbleHtml = QString(
+                    "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+                    "<tr><td style='text-align: left; vertical-align: top;'>"
+                    "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
+                    "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+                    "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
+                    "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                    "text-align: left; display: inline-block; white-space: pre-wrap; "
+                    "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+                    "</div></td></tr></table>"
+                ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
+            }
+            cursor.insertHtml(bubbleHtml);
+        }
+
+        // 设置光标到末尾并滚动
+        chatDisplay->setTextCursor(cursor);
+        chatDisplay->ensureCursorVisible();
+
+        qDebug() << "聊天历史加载完成，共显示" << messages.size() << "条消息";
+        qDebug() << "=== loadChatHistory 结束 ===";
+    }
 
 // 保存聊天消息到数据库
 void MainWindow::saveChatMessage(const QString& chatType, const QString& chatTarget,
@@ -681,4 +798,200 @@ void MainWindow::saveChatMessage(const QString& chatType, const QString& chatTar
     if (!ChatDatabase::instance()->saveMessage(message)) {
         qWarning() << "保存聊天消息失败";
     }
+}
+
+// 检查是否有更多历史记录可加载
+void MainWindow::setupScrollBarConnection() {
+    QScrollBar* scrollBar = chatDisplay->verticalScrollBar();
+
+    connect(scrollBar, &QScrollBar::valueChanged, this, [this](int value) {
+        QScrollBar* bar = chatDisplay->verticalScrollBar();
+
+        // 检查是否滚动到顶部且不在加载状态
+        if (value == bar->minimum() && !isLoadingHistory && hasMoreHistory()) {
+            loadMoreHistory();
+        }
+    });
+}
+
+// 检查是否有更多历史记录
+void MainWindow::loadMoreHistory() {
+    if (isLoadingHistory || !hasMoreHistory()) {
+        return;
+    }
+
+    isLoadingHistory = true;
+
+    // 获取当前文档内容高度
+    QTextDocument* doc = chatDisplay->document();
+    qreal oldHeight = doc->size().height();
+
+    // 获取更多历史消息，使用 offset 分页
+    QList<ChatMessage> moreMessages = ChatDatabase::instance()->getRecentMessages(
+        currentChatType, currentChatTarget, 20, loadedMessageCount
+    );
+
+    if (!moreMessages.isEmpty()) {
+        // 在文档开头插入新消息
+        QTextCursor cursor(doc);
+        cursor.movePosition(QTextCursor::Start);
+
+        QString historyContent;
+        for (const auto& msg : moreMessages) {
+            historyContent += formatMessage(msg);
+        }
+
+        cursor.insertHtml(historyContent);
+
+        // 更新加载计数
+        loadedMessageCount += moreMessages.size();
+
+        // 恢复滚动位置 - 基于内容高度变化
+        qreal newHeight = doc->size().height();
+        qreal heightDiff = newHeight - oldHeight;
+
+        QScrollBar* scrollBar = chatDisplay->verticalScrollBar();
+        int newPosition = scrollBar->value() + static_cast<int>(heightDiff);
+        scrollBar->setValue(newPosition);
+    }
+
+    isLoadingHistory = false;
+}
+
+bool MainWindow::hasMoreHistory() const {
+    // 检查数据库中是否还有更多消息
+    // 如果当前已加载的消息数量小于数据库中的总消息数量，则还有更多历史记录
+    int totalCount = ChatDatabase::instance()->getMessageCount(currentChatType, currentChatTarget);
+    return loadedMessageCount < totalCount;
+}
+
+QString MainWindow::formatMessage(const ChatMessage& msg) {
+    QString timeStr = msg.timestamp.toString("hh:mm:ss");
+    QString displayName = msg.isSelf ? "我" : msg.senderUsername;
+
+    if (msg.isSelf) {
+        // 自己的消息 - 右对齐
+        return QString(
+            "<table width='100%' style='margin: 10px 0; border-collapse: collapse;'>"
+            "<tr><td style='text-align: right; vertical-align: top;'>"
+            "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
+            "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+            "<div><span style='background-color: #1E90FF; color: white; border-radius: 18px; "
+            "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+            "text-align: left; display: inline-block; white-space: pre-wrap; "
+            "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+            "</div></td></tr></table>"
+        ).arg(displayName, timeStr, msg.content.toHtmlEscaped());
+    } else {
+        // 别人的消息 - 左对齐
+        return QString(
+            "<table width='100%' style='margin: 10px 0; border-collapse: collapse;'>"
+            "<tr><td style='text-align: left; vertical-align: top;'>"
+            "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
+            "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+            "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
+            "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+            "text-align: left; display: inline-block; white-space: pre-wrap; "
+            "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+            "</div></td></tr></table>"
+        ).arg(displayName, timeStr, msg.content.toHtmlEscaped());
+    }
+}
+
+void MainWindow::displayMessages(const QList<ChatMessage>& messages) {
+    for (const auto& msg : messages) {
+        QString formattedMsg = formatMessage(msg);
+        QTextCursor cursor = chatDisplay->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        cursor.insertHtml(formattedMsg);
+        chatDisplay->setTextCursor(cursor);
+    }
+}
+
+void MainWindow::scrollToBottom() {
+    QTextCursor cursor = chatDisplay->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    chatDisplay->setTextCursor(cursor);
+    chatDisplay->ensureCursorVisible();
+}
+
+// 请求离线消息
+void MainWindow::requestOfflineMessages() {
+    qDebug() << "=== 请求离线消息 ===";
+
+    QJsonObject request;
+    request["type"] = "getOfflineMessages";
+    request["account"] = currentAccount;
+
+    NetworkManager::instance()->sendMessage(request);
+    qDebug() << "已发送离线消息请求，账号:" << currentAccount;
+
+    // 添加超时机制：5秒后如果还没收到响应，就直接加载历史记录
+    QTimer::singleShot(5000, this, [this]() {
+        if (!isOfflineMessagesProcessed) {
+            qDebug() << "离线消息请求超时，直接加载聊天历史";
+            isOfflineMessagesProcessed = true;
+            loadChatHistory("public", "PUBLIC");
+        }
+    });
+}
+
+void MainWindow::handleOfflinePublicMessageDirect(const QString& senderAccount,
+                                                 const QString& senderUsername,
+                                                 const QString& content,
+                                                 const QString& timestamp) {
+    // 直接保存到数据库，不立即显示（避免界面混乱）
+    ChatMessage message;
+    message.chatType = "public";
+    message.chatTarget = "PUBLIC";
+    message.senderAccount = senderAccount;
+    message.senderUsername = senderUsername;
+    message.content = content;
+
+    // 使用服务器提供的时间戳
+    QDateTime dt = QDateTime::fromString(timestamp, Qt::ISODate);
+    if (dt.isValid()) {
+        message.timestamp = dt;
+    } else {
+        message.timestamp = QDateTime::currentDateTime();
+    }
+
+    message.isSelf = false;
+
+    if (!ChatDatabase::instance()->saveMessage(message)) {
+        qWarning() << "保存离线公共消息失败";
+    } else {
+        qDebug() << "离线公共消息已保存:" << content;
+    }
+}
+
+void MainWindow::handleOfflinePrivateMessageDirect(const QString& senderAccount,
+                                                  const QString& senderUsername,
+                                                  const QString& content,
+                                                  const QString& timestamp) {
+    // 直接保存到数据库
+    ChatMessage message;
+    message.chatType = "private";
+    message.chatTarget = senderAccount;  // 私聊以对方账号作为target
+    message.senderAccount = senderAccount;
+    message.senderUsername = senderUsername;
+    message.content = content;
+
+    // 使用服务器提供的时间戳
+    QDateTime dt = QDateTime::fromString(timestamp, Qt::ISODate);
+    if (dt.isValid()) {
+        message.timestamp = dt;
+    } else {
+        message.timestamp = QDateTime::currentDateTime();
+    }
+
+    message.isSelf = false;
+
+    if (!ChatDatabase::instance()->saveMessage(message)) {
+        qWarning() << "保存离线私聊消息失败";
+    } else {
+        qDebug() << "离线私聊消息已保存:" << content;
+    }
+
+    // TODO: 如果需要，可以在这里更新私聊列表显示未读消息数量
 }
