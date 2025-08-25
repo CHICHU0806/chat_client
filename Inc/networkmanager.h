@@ -23,7 +23,13 @@ public:
     void userInfoUpdateResponse(const QJsonObject& response);
     void searchFriendResponse(const QJsonObject& response);
     void addFriendResponse(const QJsonObject& response);
+    void friendRequestReceived(const QJsonObject& request);
+    void friendRequestListReceived(const QJsonObject& response);
     void offlineMessagesReceived(const QJsonObject& response);
+    void acceptFriendRequestResponse(const QJsonObject& response);
+    void rejectFriendRequestResponse(const QJsonObject& response);
+    void friendRequestNotificationReceived(const QJsonObject& notification);
+    void friendListReceived(const QJsonObject& response);
 
 private:
     explicit NetworkManager(QObject* parent = nullptr);

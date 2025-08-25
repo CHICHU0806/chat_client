@@ -84,6 +84,9 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "chatMessage") {
         emit chatMessageReceived(response);
     }
+    else if (type == "privateChatMessage") {
+        emit chatMessageReceived(response);
+    }
     else if (type == "updateUserInfo") {
         emit userInfoUpdateResponse(response);
     }
@@ -93,7 +96,25 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "addFriend") {
         emit addFriendResponse(response);
     }
-    else if (type == "offline_messages") {
+    else if (type == "friendRequest") {
+        emit friendRequestReceived(response);
+    }
+    else if (type == "getFriendRequests") {
+        emit friendRequestListReceived(response);
+    }
+    else if (type == "acceptFriendRequest") {
+        emit acceptFriendRequestResponse(response);
+    }
+    else if (type == "rejectFriendRequest") {
+        emit rejectFriendRequestResponse(response);
+    }
+    else if (type == "friendRequestResponse") {
+        emit friendRequestNotificationReceived(response);
+    }
+    else if (type == "getFriendList") {
+        emit friendListReceived(response);
+    }
+    else if (type == "offline_messages") {          //这里存疑，服务端我好像忘写了
         emit offlineMessagesReceived(response);
     }
     else {

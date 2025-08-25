@@ -255,6 +255,10 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(addFriendButton, &QPushButton::clicked, this, &MainWindow::onAddFriendButtonClicked);
     // 连接好友列表按钮
     connect(friendListButton, &QPushButton::clicked, this, &MainWindow::onFriendListButtonClicked);
+    // 连接好友添加信号
+    connect(addFriendWindow, &AddFriendWindow::friendAdded, this, [this](const QString& account, const QString& username) {Q_UNUSED(account)Q_UNUSED(username)
+    // 刷新好友列表
+    QTimer::singleShot(1000, this, &MainWindow::requestFriendList);});
 
     // 初始化添加好友窗口为空指针
     addFriendWindow = nullptr;
@@ -277,10 +281,14 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     auto* network = NetworkManager::instance();
     connect(network, &NetworkManager::chatMessageReceived, this, &MainWindow::handleChatMessage);
     connect(network, &NetworkManager::offlineMessagesReceived, this, &MainWindow::handleOfflineMessages);
-    //自动加载公共聊天室的历史记录（默认选中的是公共聊天室）
-    //loadChatHistory("public", "PUBLIC");
+    connect(network, &NetworkManager::friendListReceived, this, &MainWindow::onFriendListReceived);
 
-    QTimer::singleShot(1000, this, [this]() {
+
+    QTimer::singleShot(500, this, [this]() {
+        requestFriendList();
+    });
+
+    QTimer::singleShot(500, this, [this]() {
         requestOfflineMessages();
     });
 
@@ -367,7 +375,7 @@ void MainWindow::onAddFriendButtonClicked() {
         addFriendWindow = new AddFriendWindow(currentAccount, this);
         connect(addFriendWindow, &AddFriendWindow::friendAdded,
                 this, [this](const QString& friendAccount, const QString& friendUsername) {
-                    qDebug() << "新增好友：" << friendUsername << "(" << friendAccount << ")";
+                    qDebug() << "已发送申请：" << friendUsername << "(" << friendAccount << ")";
                     // 这里可以添加更新好友列表的逻辑
                 });
     }
@@ -462,26 +470,44 @@ void MainWindow::initializeUserList() {
 // 处理用户列表点击事件
 void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
     if (!item || item->flags() == Qt::NoItemFlags) {
-        return;
+        return; // 跳过分隔线等不可选择项
     }
 
     QString chatTarget = item->data(Qt::UserRole).toString();
 
     if (chatTarget == "PUBLIC") {
-        setWindowTitle("聊天室 - 公共聊天");
-        messageInput->setPlaceholderText("发送到公共聊天室...");
-        // 加载公共聊天历史记录
-        loadChatHistory("public", "PUBLIC");
-        qDebug() << "切换到公共聊天并加载历史记录";
-    } else {
-        setWindowTitle("聊天室 - 与 " + chatTarget + " 私聊");
-        messageInput->setPlaceholderText("发送给 " + chatTarget + "...");
-        // 加载私聊历史记录
-        loadChatHistory("private", chatTarget);
-        qDebug() << "切换到与" << chatTarget << "的私聊并加载历史记录";
+        // 切换到公共聊天
+        currentChatType = "public";
+        currentChatTarget = "PUBLIC";
+        chatDisplay->clear();
+        loadChatHistory(currentChatType, currentChatTarget);
+
+        // 更新窗口标题
+        setWindowTitle(QString("聊天室 - %1 - 公共聊天").arg(currentUsername));
+    }
+    else if (chatTarget == "SEPARATOR") {
+        // 分隔线，不做任何操作
+        return;
+    }
+    else {
+        // 切换到好友私聊
+        QString friendUsername = item->data(Qt::UserRole + 1).toString();
+        bool isOnline = item->data(Qt::UserRole + 2).toBool();
+
+        currentChatType = "private";
+        currentChatTarget = chatTarget; // 好友账号
+        chatDisplay->clear();
+        loadChatHistory(currentChatType, currentChatTarget);
+
+        // 更新窗口标题
+        QString onlineStatus = isOnline ? "[在线]" : "[离线]";
+        setWindowTitle(QString("聊天室 - %1 - 与 %2 的私聊 %3")
+                      .arg(currentUsername, friendUsername, onlineStatus));
+
+        qDebug() << "切换到好友私聊:" << friendUsername << "(" << chatTarget << ")";
     }
 
-    // 切换聊天对象后自动聚焦到输入框
+    // 聚焦输入框
     messageInput->setFocus();
 }
 
@@ -615,13 +641,26 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
 void MainWindow::sendMessageToServer(const QString &msg) {
-    // 构建聊天消息的JSON对象
+    if (msg.trimmed().isEmpty()) {
+        return;
+    }
+
     QJsonObject message;
-    message["type"] = "chatMessage";
+    message["account"] = currentAccount;
     message["username"] = currentUsername;
     message["content"] = msg;
-    message["chatType"] = "public";
-    message["account"] = currentAccount;
+    message["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+
+    // 根据当前聊天类型设置消息类型和目标
+    if (currentChatType == "public") {
+        message["type"] = "chatMessage";
+        message["chatType"] = "public";
+        // 公共聊天不需要 targetAccount
+    } else if (currentChatType == "private") {
+        message["type"] = "privateChatMessage";  // 私聊使用不同的类型
+        message["chatType"] = "private";
+        message["targetAccount"] = currentChatTarget;  // 私聊需要目标账号
+    }
 
     // 发送到服务器
     NetworkManager::instance()->sendMessage(message);
@@ -649,7 +688,7 @@ void MainWindow::sendMessageToServer(const QString &msg) {
     chatDisplay->ensureCursorVisible();
 
     // 保存到数据库
-    saveChatMessage("public", "PUBLIC", currentAccount, currentUsername, msg, true);
+    saveChatMessage(currentChatType, currentChatTarget, currentAccount, currentUsername, msg, true);
 
     // 清空输入框
     messageInput->clear();
@@ -994,4 +1033,114 @@ void MainWindow::handleOfflinePrivateMessageDirect(const QString& senderAccount,
     }
 
     // TODO: 如果需要，可以在这里更新私聊列表显示未读消息数量
+}
+
+// 请求好友列表
+void MainWindow::requestFriendList() {
+    qDebug() << "正在请求好友列表...";
+
+    QJsonObject request;
+    request["type"] = "getFriendList";
+    request["account"] = currentAccount;
+
+    NetworkManager::instance()->sendMessage(request);
+}
+
+// 处理好友列表响应
+void MainWindow::onFriendListReceived(const QJsonObject& response) {
+    qDebug() << "收到好友列表响应:" << response;
+
+    if (response["status"].toString() == "success") {
+        QJsonArray friends = response["friends"].toArray();
+        updateFriendListUI(friends);
+        qDebug() << "好友列表更新成功，好友数量:" << friends.size();
+    } else {
+        QString error = response["message"].toString();
+        qDebug() << "获取好友列表失败:" << error;
+    }
+}
+
+// 更新好友列表UI
+void MainWindow::updateFriendListUI(const QJsonArray& friends) {
+    qDebug() << "开始更新好友列表UI，好友数量:" << friends.size();
+
+    // 先清除现有的好友列表项（保留公共聊天室）
+    for (int i = userListWidget->count() - 1; i >= 1; i--) {
+        QListWidgetItem* item = userListWidget->item(i);
+        QString itemData = item->data(Qt::UserRole).toString();
+        if (itemData != "PUBLIC") {
+            delete userListWidget->takeItem(i);
+        }
+    }
+
+    // 如果有好友，添加分隔线
+    if (!friends.isEmpty()) {
+        QListWidgetItem* separator = new QListWidgetItem("――― 好友列表 ―――");
+        separator->setFlags(Qt::NoItemFlags); // 不可选择
+        separator->setTextAlignment(Qt::AlignCenter);
+        QFont separatorFont;
+        separatorFont.setPointSize(9);
+        separatorFont.setBold(true);
+        separator->setFont(separatorFont);
+        separator->setForeground(QColor("#666666"));
+        separator->setData(Qt::UserRole, "SEPARATOR");
+        userListWidget->addItem(separator);
+    }
+
+    // 按在线状态分组显示好友
+    QJsonArray onlineFriends;
+    QJsonArray offlineFriends;
+
+    for (const auto& friendValue : friends) {
+        QJsonObject friendObj = friendValue.toObject();
+        bool isOnline = friendObj["isOnline"].toBool();
+
+        if (isOnline) {
+            onlineFriends.append(friendValue);
+        } else {
+            offlineFriends.append(friendValue);
+        }
+    }
+
+    // 先添加在线好友
+    for (const auto& friendValue : onlineFriends) {
+        addFriendToList(friendValue.toObject(), true);
+    }
+
+    // 再添加离线好友
+    for (const auto& friendValue : offlineFriends) {
+        addFriendToList(friendValue.toObject(), false);
+    }
+
+    qDebug() << "好友列表UI更新完成，在线:" << onlineFriends.size() << "，离线:" << offlineFriends.size();
+}
+
+// 添加好友到列表的辅助方法
+void MainWindow::addFriendToList(const QJsonObject& friendObj, bool isOnline) {
+    QString friendAccount = friendObj["account"].toString();
+    QString friendUsername = friendObj["username"].toString();
+
+    // 创建好友列表项
+    QString statusIcon = isOnline ? "🟢" : "⚫";
+    QString displayText = QString("%1 %2").arg(statusIcon, friendUsername);
+
+    QListWidgetItem* friendItem = new QListWidgetItem(displayText);
+    friendItem->setData(Qt::UserRole, friendAccount);      // 存储好友账号
+    friendItem->setData(Qt::UserRole + 1, friendUsername); // 存储好友用户名
+    friendItem->setData(Qt::UserRole + 2, isOnline);       // 存储在线状态
+
+    // 设置字体和颜色
+    QFont friendFont;
+    friendFont.setPointSize(10);
+
+    if (isOnline) {
+        friendFont.setBold(true);
+        friendItem->setForeground(QColor("#2E7D32")); // 深绿色
+    } else {
+        friendFont.setBold(false);
+        friendItem->setForeground(QColor("#757575")); // 灰色
+    }
+
+    friendItem->setFont(friendFont);
+    userListWidget->addItem(friendItem);
 }

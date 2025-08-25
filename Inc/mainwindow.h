@@ -59,6 +59,9 @@ private slots:
     //离线消息处理
     void handleOfflineMessages(const QJsonObject& response);
 
+    //接收好友列表
+    void onFriendListReceived(const QJsonObject& response);
+
 private:
     QTextEdit *chatDisplay;    // 显示聊天内容的区域
     QLineEdit *messageInput;   // 消息输入框
@@ -117,6 +120,11 @@ private:
                                     const QString& content, const QString& timestamp);
     void handleOfflinePrivateMessageDirect(const QString& senderAccount, const QString& senderUsername,
                                          const QString& content, const QString& timestamp);
+
+    //好友列表相关方法
+    void requestFriendList();           // 请求好友列表
+    void updateFriendListUI(const QJsonArray& friends);  // 更新好友列表UI
+    void addFriendToList(const QJsonObject& friendObj, bool isOnline); // 添加单个好友到列表
 };
 
 #endif // MAINWINDOW_H
