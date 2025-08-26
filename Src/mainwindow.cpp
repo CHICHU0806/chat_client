@@ -492,17 +492,14 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
     else {
         // 切换到好友私聊
         QString friendUsername = item->data(Qt::UserRole + 1).toString();
-        bool isOnline = item->data(Qt::UserRole + 2).toBool();
 
         currentChatType = "private";
         currentChatTarget = chatTarget; // 好友账号
         chatDisplay->clear();
         loadChatHistory(currentChatType, currentChatTarget);
 
-        // 更新窗口标题
-        QString onlineStatus = isOnline ? "[在线]" : "[离线]";
-        setWindowTitle(QString("聊天室 - %1 - 与 %2 的私聊 %3")
-                      .arg(currentUsername, friendUsername, onlineStatus));
+        setWindowTitle(QString("聊天室 - %1 - 与 %2 的私聊")
+                      .arg(currentUsername, friendUsername));
 
         qDebug() << "切换到好友私聊:" << friendUsername << "(" << chatTarget << ")";
     }
@@ -545,7 +542,7 @@ void MainWindow::requestUserList() {
 }
 
 // 处理接收到的聊天消息
-void MainWindow::handleChatMessage(const QJsonObject& message) {
+void MainWindow::handleChatMessage(const QJsonObject &message) {
     qDebug() << "=== handleChatMessage 调试信息 ===";
     qDebug() << "当前用户账号:" << currentAccount;
     qDebug() << "当前用户名:" << currentUsername;
@@ -557,15 +554,15 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
 
     QString type = message["type"].toString();
     QString status = message["status"].toString();
-    QString sender = message["sender"].toString();        // 账号
-    QString username = message["username"].toString();    // 用户名
+    QString sender = message["sender"].toString(); // 账号
+    QString username = message["username"].toString(); // 用户名
     QString content = message["content"].toString();
     QString timestamp = message["timestamp"].toString();
 
     // 调试输出
     qDebug() << "收到消息 - type:" << type << "status:" << status
-             << "sender:" << sender << "username:" << username
-             << "content:" << content;
+            << "sender:" << sender << "username:" << username
+            << "content:" << content;
 
     // 只处理聊天消息
     if (type != "chatMessage") {
@@ -623,13 +620,9 @@ void MainWindow::handleChatMessage(const QJsonObject& message) {
 
     // 根据status处理不同类型的消息
     if (status == "broadcast") {
-        handlePublicChatMessage(username, content, displayTime);
-        // 保存到数据库
-        saveChatMessage("public", "PUBLIC", sender, username, content, false);
-    } else if (status == "private") {
-        handlePrivateChatMessage(username, content, displayTime);
-        // 保存到数据库
-        saveChatMessage("private", message["target"].toString(), sender, username, content, false);
+        handlePublicChatMessage(sender, username, content, displayTime);
+   } else if (status == "private") {
+        handlePrivateChatMessage(sender, username, content, displayTime);
     }
 
     // 确保滚动到底部
@@ -655,9 +648,8 @@ void MainWindow::sendMessageToServer(const QString &msg) {
     if (currentChatType == "public") {
         message["type"] = "chatMessage";
         message["chatType"] = "public";
-        // 公共聊天不需要 targetAccount
     } else if (currentChatType == "private") {
-        message["type"] = "privateChatMessage";  // 私聊使用不同的类型
+        message["type"] = "chatMessage";  // 私聊使用不同的类型
         message["chatType"] = "private";
         message["targetAccount"] = currentChatTarget;  // 私聊需要目标账号
     }
@@ -696,9 +688,8 @@ void MainWindow::sendMessageToServer(const QString &msg) {
 }
 
 //处理公共聊天消息
-void MainWindow::handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp) {
-    QString displayName = (username == currentUsername) ? "我" : username;
-
+void MainWindow::handlePublicChatMessage(const QString& senderAccount, const QString& senderUsername, const QString& content, const QString& timestamp) {
+    QString displayName = (senderAccount == currentAccount) ? "我" : senderUsername;
     // 使用table布局实现左对齐 - 别人的消息
     QString bubbleHtml = QString(
         "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
@@ -719,12 +710,12 @@ void MainWindow::handlePublicChatMessage(const QString& username, const QString&
     chatDisplay->ensureCursorVisible();
 
     // 保存到数据库
-    saveChatMessage("public", "PUBLIC", username, username, content, username == currentUsername);
+    saveChatMessage("public", "PUBLIC", senderAccount, senderUsername, content, senderAccount == currentAccount);
 }
 
 //处理私聊消息
-void MainWindow::handlePrivateChatMessage(const QString& username, const QString& content, const QString& timestamp) {
-    QString displayName = username;
+void MainWindow::handlePrivateChatMessage(const QString& senderAccount, const QString& senderUsername, const QString& content, const QString& timestamp) {
+    QString displayName = (senderAccount == currentAccount) ? "我" : senderUsername;
 
     // 使用与公共消息相同的左对齐气泡样式
     QString bubbleHtml = QString(
@@ -745,9 +736,8 @@ void MainWindow::handlePrivateChatMessage(const QString& username, const QString
     chatDisplay->setTextCursor(cursor);
     chatDisplay->ensureCursorVisible();
 
-    saveChatMessage("private", "PRIVATE", username, username, content, username == currentUsername);//保存
+    saveChatMessage("private", currentChatTarget, senderAccount, senderUsername, content, senderAccount == currentAccount);
 }
-
 
 //聊天记录加载
 void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTarget) {
@@ -763,8 +753,8 @@ void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTar
         // 清空聊天显示区域
         chatDisplay->clear();
 
-        // 增加加载数量以确保包含所有离线消息
-        QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, 100);
+        int totalCount = ChatDatabase::instance()->getMessageCount(chatType, chatTarget);
+        QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, totalCount);
 
         loadedMessageCount = messages.size();
 
@@ -1116,31 +1106,22 @@ void MainWindow::updateFriendListUI(const QJsonArray& friends) {
 }
 
 // 添加好友到列表的辅助方法
-void MainWindow::addFriendToList(const QJsonObject& friendObj, bool isOnline) {
+void MainWindow::addFriendToList(const QJsonObject& friendObj, bool /*isOnline*/) {
     QString friendAccount = friendObj["account"].toString();
     QString friendUsername = friendObj["username"].toString();
 
-    // 创建好友列表项
-    QString statusIcon = isOnline ? "🟢" : "⚫";
-    QString displayText = QString("%1 %2").arg(statusIcon, friendUsername);
+    // 只显示用户名
+    QString displayText = friendUsername;
 
     QListWidgetItem* friendItem = new QListWidgetItem(displayText);
     friendItem->setData(Qt::UserRole, friendAccount);      // 存储好友账号
     friendItem->setData(Qt::UserRole + 1, friendUsername); // 存储好友用户名
-    friendItem->setData(Qt::UserRole + 2, isOnline);       // 存储在线状态
 
-    // 设置字体和颜色
+    // 设置字体（不区分在线/离线）
     QFont friendFont;
     friendFont.setPointSize(10);
-
-    if (isOnline) {
-        friendFont.setBold(true);
-        friendItem->setForeground(QColor("#2E7D32")); // 深绿色
-    } else {
-        friendFont.setBold(false);
-        friendItem->setForeground(QColor("#757575")); // 灰色
-    }
-
+    friendFont.setBold(false);
     friendItem->setFont(friendFont);
+
     userListWidget->addItem(friendItem);
 }

@@ -84,9 +84,6 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "chatMessage") {
         emit chatMessageReceived(response);
     }
-    else if (type == "privateChatMessage") {
-        emit chatMessageReceived(response);
-    }
     else if (type == "updateUserInfo") {
         emit userInfoUpdateResponse(response);
     }

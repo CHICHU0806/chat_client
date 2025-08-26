@@ -100,8 +100,8 @@ private:
     void requestUserList(); // 请求用户列表
 
     // 辅助函数
-    void handlePublicChatMessage(const QString& username, const QString& content, const QString& timestamp);//处理公共聊天消息
-    void handlePrivateChatMessage(const QString& username, const QString& content, const QString& timestamp);//私聊
+    void handlePublicChatMessage(const QString& senderAccount, const QString& senderUsername, const QString& content, const QString& timestamp);
+    void handlePrivateChatMessage(const QString& senderAccount, const QString& senderUsername, const QString& content, const QString& timestamp);//私聊
     void sendMessageToServer(const QString &msg);
 
     // 聊天记录相关方法
