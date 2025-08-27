@@ -52,7 +52,7 @@ NetworkManager::NetworkManager(QObject* parent)
     });
 
     // 连接到服务器
-    mainTcpSocket->connectToHost(QHostAddress::LocalHost, 12345);
+    mainTcpSocket->connectToHost(QHostAddress("192.168.0.112"), 12345);
 }
 
 void NetworkManager::sendMessage(const QJsonObject& message) {
