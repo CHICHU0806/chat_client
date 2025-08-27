@@ -30,6 +30,7 @@ public:
     void rejectFriendRequestResponse(const QJsonObject& response);
     void friendRequestNotificationReceived(const QJsonObject& notification);
     void friendListReceived(const QJsonObject& response);
+    void aiAnswerReceived(const QJsonObject& response);
 
 private:
     explicit NetworkManager(QObject* parent = nullptr);

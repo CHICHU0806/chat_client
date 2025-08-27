@@ -62,6 +62,9 @@ private slots:
     //接收好友列表
     void onFriendListReceived(const QJsonObject& response);
 
+    //ai相关方法
+    void onAiAnswerReceived(const QJsonObject& resp);
+
 private:
     QTextEdit *chatDisplay;    // 显示聊天内容的区域
     QLineEdit *messageInput;   // 消息输入框
@@ -94,6 +97,11 @@ private:
 
     bool isOfflineMessagesProcessed;  // 离线消息是否已处理完成
 
+    //ai相关组件
+    QLineEdit *aiInput;        // AI输入框
+    QPushButton *aiAskButton;  // AI按钮
+    QListWidgetItem* aiListItem = nullptr;
+
     //用户列表相关函数
     void initializeUserList(); // 初始化用户列表
     void updateUserList(const QJsonArray& users); // 更新在线用户列表
@@ -125,6 +133,7 @@ private:
     void requestFriendList();           // 请求好友列表
     void updateFriendListUI(const QJsonArray& friends);  // 更新好友列表UI
     void addFriendToList(const QJsonObject& friendObj, bool isOnline); // 添加单个好友到列表
+
 };
 
 #endif // MAINWINDOW_H

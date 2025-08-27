@@ -282,7 +282,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(network, &NetworkManager::chatMessageReceived, this, &MainWindow::handleChatMessage);
     connect(network, &NetworkManager::offlineMessagesReceived, this, &MainWindow::handleOfflineMessages);
     connect(network, &NetworkManager::friendListReceived, this, &MainWindow::onFriendListReceived);
-
+    connect(NetworkManager::instance(), &NetworkManager::aiAnswerReceived, this, &MainWindow::onAiAnswerReceived);
 
     QTimer::singleShot(500, this, [this]() {
         requestFriendList();
@@ -459,6 +459,14 @@ void MainWindow::initializeUserList() {
     publicFont.setBold(true);
     publicItem->setFont(publicFont);
 
+    // 添加AI问答入口
+    aiListItem = new QListWidgetItem("🤖 AI问答");
+    aiListItem->setData(Qt::UserRole, "AI");
+    QFont aiFont;
+    aiFont.setPointSize(11);
+    aiFont.setBold(true);
+    aiListItem->setFont(aiFont);
+    userListWidget->addItem(aiListItem);
     userListWidget->addItem(publicItem);
 
     // 设置默认选中公共聊天室
@@ -484,6 +492,16 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
 
         // 更新窗口标题
         setWindowTitle(QString("聊天室 - %1 - 公共聊天").arg(currentUsername));
+    }
+    else if (chatTarget == "AI") {
+        // 切换到AI问答界面
+        currentChatType = "ai";
+        currentChatTarget = "AI";
+        chatDisplay->clear(); // 清空聊天区域
+        loadChatHistory("ai", "AI"); // 加载AI历史
+        setWindowTitle(QString("聊天室 - %1 - AI问答").arg(currentUsername));
+        // AI 问答内容会通过 onAiAnswerReceived 显示在 chatDisplay
+        return;
     }
     else if (chatTarget == "SEPARATOR") {
         // 分隔线，不做任何操作
@@ -652,6 +670,13 @@ void MainWindow::sendMessageToServer(const QString &msg) {
         message["type"] = "chatMessage";  // 私聊使用不同的类型
         message["chatType"] = "private";
         message["targetAccount"] = currentChatTarget;  // 私聊需要目标账号
+    } else if (currentChatType == "ai") {
+        message["type"] = "chatMessage";
+        message["chatType"] = "ai";
+        message["account"] = currentAccount;
+        message["question"] = msg;
+
+        saveChatMessage("ai", "AI", currentAccount, currentUsername, msg, true);
     }
 
     // 发送到服务器
@@ -1047,6 +1072,22 @@ void MainWindow::onFriendListReceived(const QJsonObject& response) {
     } else {
         QString error = response["message"].toString();
         qDebug() << "获取好友列表失败:" << error;
+    }
+}
+
+void MainWindow::onAiAnswerReceived(const QJsonObject& resp) {
+    QString status = resp["status"].toString();
+    QString answer = resp["content"].toString(); // AI回复内容
+
+    if (status == "success") {
+        // 显示
+        chatDisplay->append(QString("<b>AI：</b>%1").arg(answer));
+
+        // 保存AI回复到数据库
+        saveChatMessage("ai", "AI", "AI", "AI助手", answer, false);
+    } else {
+        QString errorMsg = resp["message"].toString();
+        chatDisplay->append(QString("<span style='color:red;'><b>AI服务错误：</b>%1</span>").arg(errorMsg));
     }
 }
 

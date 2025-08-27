@@ -111,6 +111,9 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "getFriendList") {
         emit friendListReceived(response);
     }
+    else if (type == "aiResponse") {
+        emit aiAnswerReceived(response);
+    }
     else if (type == "offline_messages") {          //这里存疑，服务端我好像忘写了
         emit offlineMessagesReceived(response);
     }
