@@ -179,34 +179,29 @@ void LoginWindow::handleLoginResponse(const QJsonObject& response) {
     accountLineEdit->setEnabled(true);
     passwordLineEdit->setEnabled(true);
 
+    // 调试输出：查看服务器实际返回的内容
+    qDebug() << "服务器登录响应:" << response;
+
     // 处理登录响应
     QString status = response["status"].toString();
     QString message = response["message"].toString();
 
-    // 调试输出：查看服务器实际返回的内容
-    qDebug() << "服务器登录响应:" << response;
-
     if (status == "success") {
-        QString username = response["username"].toString();  // 获取用户名
-        QString account = response["account"].toString();    // 账号ID（新增）
-        // 调试输出：检查获取到的值
-        qDebug() << "从响应中获取 - username:" << username << "account:" << account;
-
-        // 如果服务器没有返回account，使用登录时输入的账号
-        if (account.isEmpty()) {
-            account = accountLineEdit->text();  // 使用登录时输入的账号
-            qDebug() << "服务器未返回account，使用输入的账号:" << account;
-        }
+        QString username = response["username"].toString();
+        QString account = response["account"].toString();
+        if (account.isEmpty()) account = accountLineEdit->text();
 
         this->hide();
-        MainWindow *mainWindow = new MainWindow(NetworkManager::instance()->getSocket(), username, account);
-        mainWindow->show();
+        try {
+            if (!mainWindow) {
+                mainWindow = new MainWindow(NetworkManager::instance()->getSocket(), username, account);
+            }
+            mainWindow->show();
+        } catch (...) {
+            QMessageBox::critical(this, "错误", "主界面初始化失败！");
+            this->show();
+        }
     } else {
         QMessageBox::warning(this, "登录失败", message);
-        // 登录失败后恢复按钮和输入框
-        loginButton->setEnabled(true);
-        registerButton->setEnabled(true);
-        accountLineEdit->setEnabled(true);
-        passwordLineEdit->setEnabled(true);
     }
 }

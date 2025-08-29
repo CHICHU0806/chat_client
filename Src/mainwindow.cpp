@@ -19,7 +19,9 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
       mainTcpSocket(socket), // **将传入的共享 socket 赋值给成员变量**
       currentUsername(username),
       currentAccount(account),     // 账号ID
-      personalMsgWindow(nullptr) // 初始化为空指针
+      personalMsgWindow(nullptr), // 初始化为空指针
+      addFriendWindow(nullptr),
+      friendListWindow(nullptr)
 {
     setWindowTitle(" "); // 设置窗口标题
     setMinimumSize(1000, 750);        // 设置窗口最小大小
@@ -258,7 +260,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     // 连接好友添加信号
     connect(addFriendWindow, &AddFriendWindow::friendAdded, this, [this](const QString& account, const QString& username) {Q_UNUSED(account)Q_UNUSED(username)
     // 刷新好友列表
-    QTimer::singleShot(1000, this, &MainWindow::requestFriendList);});
+    QTimer::singleShot(500, this, &MainWindow::requestFriendList);});
 
     // 初始化添加好友窗口为空指针
     addFriendWindow = nullptr;
@@ -406,14 +408,22 @@ void MainWindow::handleOfflineMessages(const QJsonObject& response) {
     qDebug() << "=== 开始处理离线消息响应 ===";
     qDebug() << "收到离线消息响应:" << response;
 
-    // 注意：实际的离线消息是通过 chatMessage 类型的消息推送的
-    // 这个函数主要用于标记离线消息处理完成和触发界面刷新
+    QJsonArray messages = response["messages"].toArray();
+    int msgCount = messages.size();
+    if (msgCount > 0) {
+        qDebug() << "收到推送的离线消息数量:" << msgCount;
+    } else {
+        qDebug() << "未收到任何离线消息推送（messages 数组为空）";
+    }
 
+
+    // 标记离线消息已处理
     isOfflineMessagesProcessed = true;
 
-    qDebug() << "离线消息处理完成，重新加载聊天历史";
+    // 重新加载公聊历史
     loadChatHistory("public", "PUBLIC");
 
+    qDebug() << "离线消息处理完成，重新加载聊天历史";
     qDebug() << "=== 离线消息处理结束 ===";
 }
 
@@ -561,15 +571,6 @@ void MainWindow::requestUserList() {
 
 // 处理接收到的聊天消息
 void MainWindow::handleChatMessage(const QJsonObject &message) {
-    qDebug() << "=== handleChatMessage 调试信息 ===";
-    qDebug() << "当前用户账号:" << currentAccount;
-    qDebug() << "当前用户名:" << currentUsername;
-    qDebug() << "消息发送者账号:" << message["sender"].toString();
-    qDebug() << "消息发送者用户名:" << message["username"].toString();
-    qDebug() << "消息内容:" << message["content"].toString();
-    qDebug() << "消息类型:" << message["type"].toString();
-    qDebug() << "消息状态:" << message["status"].toString();
-
     QString type = message["type"].toString();
     QString status = message["status"].toString();
     QString sender = message["sender"].toString(); // 账号
@@ -577,14 +578,8 @@ void MainWindow::handleChatMessage(const QJsonObject &message) {
     QString content = message["content"].toString();
     QString timestamp = message["timestamp"].toString();
 
-    // 调试输出
-    qDebug() << "收到消息 - type:" << type << "status:" << status
-            << "sender:" << sender << "username:" << username
-            << "content:" << content;
-
     // 只处理聊天消息
     if (type != "chatMessage") {
-        qDebug() << "不是聊天消息，忽略";
         return;
     }
 
@@ -766,75 +761,45 @@ void MainWindow::handlePrivateChatMessage(const QString& senderAccount, const QS
 
 //聊天记录加载
 void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTarget) {
-        qDebug() << "=== loadChatHistory 开始 ===";
-        qDebug() << "聊天类型:" << chatType << "聊天目标:" << chatTarget;
+    qDebug() << "=== loadChatHistory 开始 ===";
+    qDebug() << "聊天类型:" << chatType << "聊天目标:" << chatTarget;
 
-        // 更新当前聊天信息
-        currentChatType = chatType;
-        currentChatTarget = chatTarget;
-        loadedMessageCount = 0;
-        isLoadingHistory = false;
+    currentChatType = chatType;
+    currentChatTarget = chatTarget;
+    loadedMessageCount = 0;
+    isLoadingHistory = false;
 
-        // 清空聊天显示区域
-        chatDisplay->clear();
+    chatDisplay->clear();
 
-        int totalCount = ChatDatabase::instance()->getMessageCount(chatType, chatTarget);
-        QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, totalCount);
+    int pageSize = 30; // 每页加载30条
+    int totalCount = ChatDatabase::instance()->getMessageCount(chatType, chatTarget);
+    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, pageSize);
 
-        loadedMessageCount = messages.size();
+    loadedMessageCount = messages.size();
 
-        qDebug() << "从本地数据库加载了" << messages.size() << "条历史记录";
+    qDebug() << "从本地数据库加载了" << messages.size() << "条历史记录";
 
-        if (messages.isEmpty()) {
-            qDebug() << "没有历史记录可显示";
-            return;
-        }
-
-        // 直接在这里显示消息
-        QTextCursor cursor = chatDisplay->textCursor();
-        cursor.movePosition(QTextCursor::End);
-
-        for (const auto& message : messages) {
-            QString bubbleHtml;
-            QString timestamp = message.timestamp.toString("hh:mm:ss");
-
-            if (message.isSelf) {
-                // 自己的消息（右对齐）
-                bubbleHtml = QString(
-                    "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
-                    "<tr><td style='text-align: right; vertical-align: top;'>"
-                    "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
-                    "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-                    "<div><span style='background-color: #1E90FF; color: white; border-radius: 25px; "
-                    "padding: 12px 20px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-                    "text-align: right; display: inline-block; white-space: pre-wrap; "
-                    "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
-                    "</div></td></tr></table>"
-                ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
-            } else {
-                // 别人的消息（左对齐）
-                bubbleHtml = QString(
-                    "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
-                    "<tr><td style='text-align: left; vertical-align: top;'>"
-                    "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
-                    "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-                    "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
-                    "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-                    "text-align: left; display: inline-block; white-space: pre-wrap; "
-                    "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
-                    "</div></td></tr></table>"
-                ).arg(message.senderUsername, timestamp, message.content.toHtmlEscaped());
-            }
-            cursor.insertHtml(bubbleHtml);
-        }
-
-        // 设置光标到末尾并滚动
-        chatDisplay->setTextCursor(cursor);
-        chatDisplay->ensureCursorVisible();
-
-        qDebug() << "聊天历史加载完成，共显示" << messages.size() << "条消息";
-        qDebug() << "=== loadChatHistory 结束 ===";
+    if (messages.isEmpty()) {
+        qDebug() << "没有历史记录可显示";
+        return;
     }
+
+    // 批量拼接HTML，一次性插入
+    QString html;
+    for (const auto& message : messages) {
+        html += formatMessage(message);
+    }
+    chatDisplay->insertHtml(html);
+
+    // 设置光标到末尾并滚动
+    QTextCursor cursor = chatDisplay->textCursor();
+    cursor.movePosition(QTextCursor::End);
+    chatDisplay->setTextCursor(cursor);
+    chatDisplay->ensureCursorVisible();
+
+    qDebug() << "聊天历史加载完成，共显示" << messages.size() << "条消息";
+    qDebug() << "=== loadChatHistory 结束 ===";
+}
 
 // 保存聊天消息到数据库
 void MainWindow::saveChatMessage(const QString& chatType, const QString& chatTarget,
@@ -1046,8 +1011,6 @@ void MainWindow::handleOfflinePrivateMessageDirect(const QString& senderAccount,
     } else {
         qDebug() << "离线私聊消息已保存:" << content;
     }
-
-    // TODO: 如果需要，可以在这里更新私聊列表显示未读消息数量
 }
 
 // 请求好友列表

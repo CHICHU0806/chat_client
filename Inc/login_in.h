@@ -5,6 +5,7 @@
 #ifndef LOGIN_IN_H
 #define LOGIN_IN_H
 
+#include "mainwindow.h"
 #include <QWidget>     // LoginWindow 继承自 QWidget
 #include <QLabel>      // 成员变量类型：QLabel*
 #include <QLineEdit>   // 成员变量类型：QLineEdit*
@@ -37,7 +38,7 @@ private slots:
     void handleLoginResponse(const QJsonObject& response); // 处理登录响应的槽函数
 
 private:
-    // 定义窗口中将使用的 GUI 控件的成员变量
+    MainWindow *mainWindow = nullptr;
     QLabel *accountLabel;
     QLineEdit *accountLineEdit;
     QLabel *passwordLabel;

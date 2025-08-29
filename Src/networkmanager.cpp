@@ -9,7 +9,7 @@
 
 NetworkManager* NetworkManager::_instance = nullptr;
 
-//单例模式设计
+//单例模式设计，保证一机一ip/端口
 NetworkManager* NetworkManager::instance() {
     if (!_instance) {
         _instance = new NetworkManager();
@@ -17,7 +17,6 @@ NetworkManager* NetworkManager::instance() {
     return _instance;
 }
 
-//构造函数实现
 NetworkManager::NetworkManager(QObject* parent)
     : QObject(parent),
       mainTcpSocket(new QTcpSocket(this)),
@@ -52,7 +51,7 @@ NetworkManager::NetworkManager(QObject* parent)
     });
 
     // 连接到服务器
-    mainTcpSocket->connectToHost(QHostAddress("192.168.0.112"), 12345);
+    mainTcpSocket->connectToHost(QHostAddress("127.0.0.1"), 12345);
 }
 
 void NetworkManager::sendMessage(const QJsonObject& message) {
@@ -114,7 +113,7 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     else if (type == "aiResponse") {
         emit aiAnswerReceived(response);
     }
-    else if (type == "offline_messages") {          //这里存疑，服务端我好像忘写了
+    else if (type == "offline_messages") {
         emit offlineMessagesReceived(response);
     }
     else {

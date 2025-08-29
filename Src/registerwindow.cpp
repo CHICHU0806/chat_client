@@ -121,12 +121,15 @@ void RegisterWindow::onConfirmButtonClicked() {
     QString password = passwordLineEdit->text();
 
     if (account.isEmpty() || password.isEmpty()) {
-        // || confirmPassword.isEmpty()) { // 根据需要添加确认密码的检查
         QMessageBox::warning(this, "输入错误", "账号和密码不能为空！");
+        accountLineEdit->clear();
+        passwordLineEdit->clear();
+        accountLineEdit->setFocus();
         return;
     }
 
-    // 使用 NetworkManager 发送注册请求
+    confirmButton->setEnabled(false);
+
     QJsonObject request;
     request["type"] = "register";
     request["username"] = username;
@@ -134,9 +137,6 @@ void RegisterWindow::onConfirmButtonClicked() {
     request["password"] = password;
 
     NetworkManager::instance()->sendMessage(request);
-
-    // 禁用按钮防止重复提交
-    confirmButton->setEnabled(false);
 }
 
 // 处理注册响应的槽函数
@@ -146,11 +146,12 @@ void RegisterWindow::handleRegisterResponse(const QJsonObject& response) {
 
     if (status == "success") {
         QMessageBox::information(this, "注册成功", message);
-        this->close();
+        this->close(); // 自动关闭注册窗口
     } else {
         QMessageBox::warning(this, "注册失败", message);
+        accountLineEdit->clear();
+        passwordLineEdit->clear();
+        accountLineEdit->setFocus();
+        confirmButton->setEnabled(true);
     }
-
-    // 重新启用按钮
-    confirmButton->setEnabled(true);
 }
