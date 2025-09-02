@@ -12,6 +12,10 @@
 #include <QDateTime>     // 用于显示消息时间
 #include <QScrollBar>   // 用于滚动条控制
 #include <QTimer>
+#include <QGraphicsDropShadowEffect>  // 添加阴影效果头文件
+#include <QMouseEvent>  // 添加鼠标事件头文件
+#include <QTextCharFormat>  // 添加文本格式头文件
+#include <QFileDialog> // 文件对话框
 
 // 构造函数
 MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString& account, QWidget *parent)
@@ -23,22 +27,108 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
       addFriendWindow(nullptr),
       friendListWindow(nullptr)
 {
-    setWindowTitle(" "); // 设置窗口标题
+    setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
+    setAttribute(Qt::WA_TranslucentBackground);
     setMinimumSize(1000, 750);        // 设置窗口最小大小
 
-    // 创建主布局
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    // 创建主容器widget，用于应用阴影效果
+    QWidget *mainContainer = new QWidget(this);
+    mainContainer->setStyleSheet(
+        "background-color: #6690A0;"
+        "border-radius: 18px;"
+    );
+
+    // 创建阴影效果
+    QGraphicsDropShadowEffect *shadowEffect = new QGraphicsDropShadowEffect(this);
+    shadowEffect->setBlurRadius(20);           // 阴影模糊半径
+    shadowEffect->setXOffset(0);               // X轴偏移
+    shadowEffect->setYOffset(0);               // Y轴偏移
+    shadowEffect->setColor(QColor(0, 0, 0, 100)); // 阴影颜色和透明度
+    mainContainer->setGraphicsEffect(shadowEffect);
+
+    // 保存阴影效果和主容器的引用，用于最大化时的处理
+    this->shadowEffect = shadowEffect;
+    this->mainContainer = mainContainer;
+
+    // 创建主容器的布局
+    QVBoxLayout *containerLayout = new QVBoxLayout(this);
+    containerLayout->setContentsMargins(20, 20, 20, 20); // 为阴影留出空间
+    containerLayout->addWidget(mainContainer);
+
+    // 保存容器布局的引用
+    this->containerLayout = containerLayout;
+
+    QWidget *titleBar = new QWidget(mainContainer);
+    titleBar->setFixedHeight(36);
+    // titleBar 只设置上方圆角
+    titleBar->setStyleSheet(
+        "background-color: #3A5A6C;"
+        "border-top-left-radius: 18px;"
+        "border-top-right-radius: 18px;"
+        "border-bottom-left-radius: 0px;"
+        "border-bottom-right-radius: 0px;"
+    );
+
+    QHBoxLayout *titleLayout = new QHBoxLayout(titleBar);
+    titleLayout->setContentsMargins(10, 0, 0, 0);
+
+    QLabel *titleLabel = new QLabel("聊天室", titleBar);
+    titleLabel->setStyleSheet("color: white; font-size: 15px;");
+    titleLayout->addWidget(titleLabel);
+
+    titleLayout->addStretch();
+
+
+    QPushButton *minBtn = new QPushButton("-", titleBar);
+    QPushButton *maxBtn = new QPushButton("□", titleBar);
+    QPushButton *closeBtn = new QPushButton("×", titleBar);
+
+    QString btnStyle =
+    "QPushButton {"
+    "  background: transparent;"
+    "  border: none;"
+    "  color: white;"
+    "  font-size: 18px;"
+    "  min-width: 32px;"
+    "  min-height: 32px;"
+    "  border-radius: 16px;"
+    "  outline: none;"
+    "}"
+    "QPushButton:focus {"
+    "  outline: none;"
+    "  border: none;"
+    "}"
+    "QPushButton:hover {"
+    "  background: #607D8B;"
+    "}"
+    "QPushButton:pressed {"
+    "  background: #455A64;"
+    "}";
+
+    minBtn->setStyleSheet(btnStyle);
+    maxBtn->setStyleSheet(btnStyle);
+    closeBtn->setStyleSheet(btnStyle.replace("#607D8B", "#E57373").replace("#455A64", "#D32F2F"));
+
+    titleLayout->addWidget(minBtn);
+    titleLayout->addWidget(maxBtn);
+    titleLayout->addWidget(closeBtn);
+
+    // 创建主布局 - 应用到mainContainer而不是this
+    QVBoxLayout *mainLayout = new QVBoxLayout(mainContainer);
     mainLayout->setSpacing(0);
     mainLayout->setContentsMargins(0, 0, 0, 0);
 
     // 1. 创建顶部状态栏
-    QWidget *topBar = new QWidget(this);
+    QWidget *topBar = new QWidget(mainContainer);
     topBar->setFixedHeight(50);  // 固定高度
+    // topBar 不设置圆角，保持贴合
     topBar->setStyleSheet(
-        "QWidget {"
-        "    background-color: #6690A0;"  // 深色背景
-        "    border-bottom: 1px solid #1E1E1E;"  // 底部边框
-        "}"
+        "background-color: #6690A0;"
+        "border-top-left-radius: 0px;"
+        "border-top-right-radius: 0px;"
+        "border-bottom-left-radius: 0px;"
+        "border-bottom-right-radius: 0px;"
+        "border-bottom: 1px solid #1E1E1E;"
     );
 
     // 顶部状态栏的布局
@@ -46,7 +136,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     topBarLayout->setContentsMargins(10, 0, 10, 0);
 
     // 创建个人消息按钮（圆形）
-    personalMsgButton = new QPushButton(this);
+    personalMsgButton = new QPushButton(mainContainer);
     personalMsgButton->setFixedSize(35, 35); // 设置为圆形大小
     personalMsgButton->setStyleSheet(
         "QPushButton {"
@@ -68,7 +158,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     topBarLayout->addStretch();  // 左侧弹性空间
 
     // 添加一些示例控件到顶部栏
-    QPushButton *settingsButton = new QPushButton("⚙", this);
+    QPushButton *settingsButton = new QPushButton("⚙", mainContainer);
     settingsButton->setStyleSheet(
         "QPushButton {"
         "    background-color: transparent;"
@@ -87,7 +177,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     );
 
     // 创建添加好友按钮
-    addFriendButton = new QPushButton("➕", this);
+    addFriendButton = new QPushButton("➕", mainContainer);
     addFriendButton->setStyleSheet(
         "QPushButton {"
         "    background-color: transparent;"
@@ -108,7 +198,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     topBarLayout->addWidget(addFriendButton);    // 添加好友按钮
 
     // 创建好友列表按钮
-    friendListButton = new QPushButton("👥", this);
+    friendListButton = new QPushButton("👥", mainContainer);
     friendListButton->setStyleSheet(
         "QPushButton {"
         "    background-color: transparent;"
@@ -132,7 +222,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     topBarLayout->addWidget(settingsButton);
 
     // 创建主分割器
-    QSplitter *mainSplitter = new QSplitter(Qt::Horizontal, this);
+    QSplitter *mainSplitter = new QSplitter(Qt::Horizontal, mainContainer);
     mainSplitter->setHandleWidth(1);  // 设置分割条的宽度
     mainSplitter->setStyleSheet(
         "QSplitter::handle {"
@@ -144,25 +234,64 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     );
 
     // 1. 左侧用户列表区域
-    QWidget *leftWidget = new QWidget(this);
+    QWidget *leftWidget = new QWidget(mainContainer);
     leftWidget->setMinimumWidth(180);  // 添加这行：设置最小宽度
     leftWidget->setMaximumWidth(350);  // 添加这行：设置最大宽度
     QVBoxLayout *leftLayout = new QVBoxLayout(leftWidget);
     leftLayout->setContentsMargins(0, 0, 0, 0);
 
+    // leftWidget 只设置左下圆角，其余为0
+    leftWidget->setStyleSheet(
+        "background-color: #6690A0;"
+        "border-top-left-radius: 0px;"
+        "border-top-right-radius: 0px;"
+        "border-bottom-left-radius: 18px;"
+        "border-bottom-right-radius: 0px;"
+    );
+
     userListWidget = new QListWidget(leftWidget);
     userListWidget->setStyleSheet(
         "QListWidget {"
         "    border: none;"
-        "    background-color: white;"
+        "    background-color: #6690A0;"
+        "    outline: none;"
+        "}"
+        "QListWidget::item {"
+        "    height: 45px;"
+        "    padding: 8px 12px;"
+        "    margin: 2px 8px;"
+        "    border-radius: 0px;" // 取消圆角
+        "    background-color: #6690A0;"
+        "    border: 1px solid #e0e0e0;"
+        "}"
+        "QListWidget::item:hover {"
+        "    background-color: #607D8B;"
+        "    border-color: white;"
+        "}"
+        "QListWidget::item:selected {"
+        "    background-color: #009688;"
+        "    color: white;"
+        "    border-color: #1976d2;"
+        "}"
+        "QListWidget::item:selected:hover {"
+        "    background-color: #009688;"
         "}"
     );
 
     leftLayout->addWidget(userListWidget);
 
     // 2. 中间聊天区域
-    QWidget *centerWidget = new QWidget(this);
+    QWidget *centerWidget = new QWidget(mainContainer);
     centerWidget->setMinimumWidth(400);  // 添加这行：设置聊天区域最小宽度
+    // centerWidget 只设置下方圆角，保证底部圆角
+    centerWidget->setStyleSheet(
+        "background-color: #6690A0;"
+        "border-top-left-radius: 0px;"
+        "border-top-right-radius: 0px;"
+        "border-bottom-left-radius: 18px;"
+        "border-bottom-right-radius: 18px;"
+    );
+
     QVBoxLayout *centerLayout = new QVBoxLayout(centerWidget);
     centerLayout->setContentsMargins(0, 0, 0, 0);
     centerLayout->setSpacing(0);
@@ -170,11 +299,40 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     chatDisplay = new QTextEdit(centerWidget);
     chatDisplay->setReadOnly(true);
     chatDisplay->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    // 安装事件过滤器，实现QQ式的光标效果
+    chatDisplay->installEventFilter(this);
+    // 设置默认光标为箭头
+    chatDisplay->viewport()->setCursor(Qt::ArrowCursor);
     chatDisplay->setStyleSheet(
         "QTextEdit {"
         "    border: none;"
         "    background-color: #6690A0;"
         "    padding: 10px;"
+        "}"
+        "QScrollBar:vertical {"
+        "    background: #e0e0e0;"
+        "    width: 12px;"
+        "    margin: 0px 0px 0px 0px;"
+        "    border-radius: 6px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "    background: #607D8B;"
+        "    min-height: 30px;"
+        "    border-radius: 6px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "    background: #455A64;"
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+        "    background: none;"
+        "    height: 0px;"
+        "}"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+        "    background: none;"
+        "}"
+        "QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {"
+        "    background: none;"
+        "    border: none;"
         "}"
     );
 
@@ -185,6 +343,64 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     currentChatTarget = "PUBLIC";
     loadedMessageCount = 0;
     isLoadingHistory = false;
+
+    // 创建输入区域上方的工具栏
+    QWidget *toolBar = new QWidget(centerWidget);
+    toolBar->setFixedHeight(40);
+    toolBar->setStyleSheet(
+        "QWidget {"
+        "    background-color: #6690A0;"
+        "    border: none;"
+        "}"
+    );
+
+    QHBoxLayout *toolLayout = new QHBoxLayout(toolBar);
+    toolLayout->setContentsMargins(10, 5, 10, 5);
+    toolLayout->setSpacing(10);
+
+    // 发送文件按钮
+    QPushButton *sendFileButton = new QPushButton("📎", toolBar);
+    sendFileButton->setFixedSize(30, 30);
+    sendFileButton->setStyleSheet(
+        "QPushButton {"
+        "    background-color: #607D8B;"
+        "    color: white;"
+        "    border: none;"
+        "    border-radius: 15px;"
+        "    font-size: 16px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: #455A64;"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: #37474F;"
+        "}"
+    );
+    sendFileButton->setToolTip("发送文件");
+
+    // 发送图片按钮
+    QPushButton *sendImageButton = new QPushButton("🖼️", toolBar);
+    sendImageButton->setFixedSize(30, 30);
+    sendImageButton->setStyleSheet(
+        "QPushButton {"
+        "    background-color: #607D8B;"
+        "    color: white;"
+        "    border: none;"
+        "    border-radius: 15px;"
+        "    font-size: 16px;"
+        "}"
+        "QPushButton:hover {"
+        "    background-color: #455A64;"
+        "}"
+        "QPushButton:pressed {"
+        "    background-color: #37474F;"
+        "}"
+    );
+    sendImageButton->setToolTip("发送图片");
+
+    toolLayout->addWidget(sendFileButton);
+    toolLayout->addWidget(sendImageButton);
+    toolLayout->addStretch(); // 左对齐
 
     // 创建输入区域
     QWidget *inputArea = new QWidget(centerWidget);
@@ -215,6 +431,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "}"
     );
 
+    mainLayout->insertWidget(0, titleBar);
     mainLayout->addWidget(topBar);
     mainLayout->addWidget(mainSplitter);
 
@@ -222,6 +439,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     inputLayout->addWidget(sendButton);
 
     centerLayout->addWidget(chatDisplay);
+    centerLayout->addWidget(toolBar);    // 添加工具栏
     centerLayout->addWidget(inputArea);
 
     // 添加部件到分割器
@@ -242,7 +460,32 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     // 将分割器添加到主布局
     mainLayout->addWidget(mainSplitter);
 
-    // 连接信号与槽
+    // 连接重写标题栏按钮信号槽
+    connect(minBtn, &QPushButton::clicked, this, &QWidget::showMinimized);
+    connect(maxBtn, &QPushButton::clicked, this, [this]() {
+        static bool isProcessing = false;
+        if (isProcessing) return;
+
+        isProcessing = true;
+
+        if (isMaximized()) {
+            showNormal();
+            QTimer::singleShot(50, this, [this]() {
+                restoreNormalWindowStyle();
+            });
+        } else {
+            showMaximized();
+            QTimer::singleShot(50, this, [this]() {
+                setMaximizedWindowStyle();
+            });
+        }
+
+        QTimer::singleShot(200, []() {
+            isProcessing = false;
+        });
+    });
+    connect(closeBtn, &QPushButton::clicked, this, &QWidget::close);
+
     // 连接发送按钮的 clicked 信号到 onSendMessageButtonClicked 槽
     connect(sendButton, &QPushButton::clicked, this, &MainWindow::onSendButtonClicked);
     // 允许按 Enter 键发送消息
@@ -257,10 +500,6 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(addFriendButton, &QPushButton::clicked, this, &MainWindow::onAddFriendButtonClicked);
     // 连接好友列表按钮
     connect(friendListButton, &QPushButton::clicked, this, &MainWindow::onFriendListButtonClicked);
-    // 连接好友添加信号
-    connect(addFriendWindow, &AddFriendWindow::friendAdded, this, [this](const QString& account, const QString& username) {Q_UNUSED(account)Q_UNUSED(username)
-    // 刷新好友列表
-    QTimer::singleShot(500, this, &MainWindow::requestFriendList);});
 
     // 初始化添加好友窗口为空指针
     addFriendWindow = nullptr;
@@ -285,6 +524,13 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(network, &NetworkManager::offlineMessagesReceived, this, &MainWindow::handleOfflineMessages);
     connect(network, &NetworkManager::friendListReceived, this, &MainWindow::onFriendListReceived);
     connect(NetworkManager::instance(), &NetworkManager::aiAnswerReceived, this, &MainWindow::onAiAnswerReceived);
+    connect(network, &NetworkManager::unknownMessageReceived, this, &MainWindow::handleUnknownMessage);
+
+    //连接文件传输相关信号
+    connect(network, &NetworkManager::fileTransferResponse, this, &MainWindow::handleFileTransferResponse);
+    connect(network, &NetworkManager::fileChunkReceived, this, &MainWindow::handleFileChunkReceived);
+    connect(sendFileButton, &QPushButton::clicked, this, &MainWindow::onSendFileButtonClicked);
+    connect(sendImageButton, &QPushButton::clicked, this, &MainWindow::onSendImageButtonClicked);
 
     QTimer::singleShot(500, this, [this]() {
         requestFriendList();
@@ -294,6 +540,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         requestOfflineMessages();
     });
 
+    initializeDownloadDir();
     isOfflineMessagesProcessed = false;
 
     qDebug() << "MainWindow initialized with shared socket.";
@@ -305,6 +552,73 @@ MainWindow::~MainWindow() {
     // m_tcpSocket 不需要在这里 delete，因为它是由 LoginWindow 管理的共享指针
 }
 
+// 在 MainWindow 类中添加事件处理
+void MainWindow::mousePressEvent(QMouseEvent *event) {
+    // 只处理拖动（左键按下且在标题栏区域）
+    if (event->button() == Qt::LeftButton && event->pos().y() <= 36) {
+        if (!isMaximized()) {
+            dragging = true;
+            dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
+            event->accept();
+        } else {
+            // 最大化时的拖拽处理 - 简化逻辑
+            dragging = true;
+
+            // 记录鼠标在窗口标题栏中的相对位置
+            QPoint mouseInWindow = event->pos();
+            QPoint globalMousePos = event->globalPosition().toPoint();
+
+            // 计算鼠标在标题栏中的比例位置
+            double mouseRatio = static_cast<double>(mouseInWindow.x()) / width();
+
+            // 还原窗口 - 使用简单的还原方法
+            showNormal();
+
+            // 一次性恢复样式，避免重复设置
+            restoreNormalWindowStyle();
+
+            // 计算新位置
+            QSize normalSize = size(); // 使用当前大小
+            int newX = globalMousePos.x() - static_cast<int>(normalSize.width() * mouseRatio);
+            int newY = globalMousePos.y() - mouseInWindow.y();
+
+            // 边界检查
+            QScreen* screen = QGuiApplication::primaryScreen();
+            QRect screenGeometry = screen->availableGeometry();
+            newX = qMax(screenGeometry.left(), qMin(newX, screenGeometry.right() - normalSize.width()));
+            newY = qMax(screenGeometry.top(), qMin(newY, screenGeometry.bottom() - normalSize.height()));
+
+            // 移动窗口
+            move(newX, newY);
+
+            // 重新计算拖动偏移
+            dragPosition = globalMousePos - QPoint(newX, newY);
+            event->accept();
+        }
+    }
+}
+
+void MainWindow::mouseMoveEvent(QMouseEvent *event) {
+    if (dragging && (event->buttons() & Qt::LeftButton)) {
+        // 简化移动逻辑，避免在移动过程中重复设置样式
+        move(event->globalPosition().toPoint() - dragPosition);
+        event->accept();
+    }
+}
+
+void MainWindow::mouseReleaseEvent(QMouseEvent *event) {
+    if (dragging) {
+        dragging = false;
+
+        // 只在拖拽到顶部时才最大化
+        if (event->globalPosition().toPoint().y() <= 10) {
+            showMaximized();
+            // 设置最大化样式
+            setMaximizedWindowStyle();
+        }
+        event->accept();
+    }
+}
 // 重写 closeEvent 方法，在窗口关闭事件发生时断开socket连接
 void MainWindow::closeEvent(QCloseEvent *event) {
     // 可以在这里做一些清理工作，例如，如果主窗口关闭意味着整个客户端退出，则可以断开连接
@@ -321,6 +635,36 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 void MainWindow::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     messageInput->setFocus();  // 窗口显示时聚焦到输入框
+}
+
+void MainWindow::mouseDoubleClickEvent(QMouseEvent *event) {
+    if (event->pos().y() <= 36) {
+        // 防止重复触发
+        static bool isProcessing = false;
+        if (isProcessing) return;
+
+        isProcessing = true;
+
+        if (isMaximized()) {
+            showNormal();
+            QTimer::singleShot(50, this, [this]() {
+                restoreNormalWindowStyle();
+            });
+        } else {
+            showMaximized();
+            QTimer::singleShot(50, this, [this]() {
+                setMaximizedWindowStyle();
+            });
+        }
+
+        QTimer::singleShot(200, []() {
+            isProcessing = false;
+        });
+
+        event->accept();
+    } else {
+        QWidget::mouseDoubleClickEvent(event);
+    }
 }
 
 // **槽函数：发送消息按钮点击时触发**
@@ -391,11 +735,21 @@ void MainWindow::onAddFriendButtonClicked() {
 void MainWindow::onFriendListButtonClicked() {
     if (!friendListWindow) {
         friendListWindow = new FriendListWindow(currentAccount, this);
+        // 传递当前好友列表数据
+        friendListWindow->setFriendList(currentFriendListJsonArray);
         connect(friendListWindow, &FriendListWindow::friendSelected,
                 this, [this](const QString& friendAccount, const QString& friendUsername) {
-                    qDebug() << "选择好友进行聊天：" << friendUsername << "(" << friendAccount << ")";
-                    // 这里可以添加切换到私聊的逻辑
+                    // 切换到对应好友私聊
+                    currentChatType = "private";
+                    currentChatTarget = friendAccount;
+                    chatDisplay->clear();
+                    loadChatHistory(currentChatType, currentChatTarget);
+                    setWindowTitle(QString("聊天室 - %1 - 与 %2 的私聊").arg(currentUsername, friendUsername));
                 });
+        connect(friendListWindow, &FriendListWindow::requestFriendList, this, &MainWindow::requestFriendList);
+    } else {
+        // 每次打开都刷新好友列表
+        friendListWindow->setFriendList(currentFriendListJsonArray);
     }
 
     friendListWindow->show();
@@ -416,14 +770,45 @@ void MainWindow::handleOfflineMessages(const QJsonObject& response) {
         qDebug() << "未收到任何离线消息推送（messages 数组为空）";
     }
 
+    // 关键改动：将离线消息直接保存到数据库
+    for (const QJsonValue &messageValue : messages) {
+        QJsonObject message = messageValue.toObject();
+        QString type = message["type"].toString();
+        QString status = message["status"].toString();
+        QString sender = message["sender"].toString(); // 账号
+        QString username = message["username"].toString(); // 用户名
+        QString content = message["content"].toString();
+        QString timestamp = message["timestamp"].toString();
+
+        if (type == "chatMessage" && (status == "offline_broadcast" || status == "offline_private")) {
+            ChatMessage msg;
+            msg.senderAccount = sender;
+            msg.senderUsername = username;
+            msg.content = content;
+            msg.timestamp = QDateTime::fromString(timestamp, Qt::ISODate);
+            msg.isSelf = (sender == currentAccount);
+            if (status == "offline_broadcast") {
+                msg.chatType = "public";
+                msg.chatTarget = "PUBLIC";
+            } else if (status == "offline_private") {
+                msg.chatType = "private";
+                msg.chatTarget = message["target"].toString();
+            }
+            ChatDatabase::instance()->saveMessage(msg);
+        }
+    }
 
     // 标记离线消息已处理
     isOfflineMessagesProcessed = true;
 
-    // 重新加载公聊历史
-    loadChatHistory("public", "PUBLIC");
+    // 关键改动：根据当前聊天类型和目标重新加载历史记录
+    qDebug() << "离线消息处理完成，根据当前聊天窗口加载历史记录。";
+    if (currentChatType == "public") {
+        loadChatHistory("public", "PUBLIC");
+    } else if (currentChatType == "private" && !currentChatTarget.isEmpty()) {
+        loadChatHistory("private", currentChatTarget);
+    }
 
-    qDebug() << "离线消息处理完成，重新加载聊天历史";
     qDebug() << "=== 离线消息处理结束 ===";
 }
 
@@ -442,7 +827,7 @@ void MainWindow::initializeUserList() {
         "    height: 45px;"                    // 固定每项高度
         "    padding: 8px 12px;"              // 内边距
         "    margin: 2px 8px;"                // 外边距
-        "    border-radius: 6px;"             // 圆角
+        "    border-radius: 0px;"             // 取消圆角
         "    background-color: #6690A0;"        // 默认背景色
         "    border: 1px solid #e0e0e0;"      // 边框
         "}"
@@ -546,7 +931,8 @@ void MainWindow::updateUserList(const QJsonArray& users) {
     // 添加在线用户
     for (const auto& userValue : users) {
         QString username = userValue.toString();
-        if (username != currentUsername) { // 不显示自己
+        if (username != currentUsername) // 不显示自己
+        {
             QListWidgetItem* item = new QListWidgetItem("👤 " + username);
             item->setData(Qt::UserRole, username);
             // 设置普通用户的字体
@@ -709,53 +1095,54 @@ void MainWindow::sendMessageToServer(const QString &msg) {
 
 //处理公共聊天消息
 void MainWindow::handlePublicChatMessage(const QString& senderAccount, const QString& senderUsername, const QString& content, const QString& timestamp) {
-    QString displayName = (senderAccount == currentAccount) ? "我" : senderUsername;
-    // 使用table布局实现左对齐 - 别人的消息
-    QString bubbleHtml = QString(
-        "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
-        "<tr><td style='text-align: left; vertical-align: top;'>"
-        "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
-        "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-        "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
-        "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-        "text-align: left; display: inline-block; white-space: pre-wrap; "
-        "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
-        "</div></td></tr></table>"
-    ).arg(displayName, timestamp, content.toHtmlEscaped());
+    if (currentChatType == "public") {
+        QString displayName = (senderAccount == currentAccount) ? "我" : senderUsername;
+        // 使用table布局实现左对齐 - 别人的消息
+        QString bubbleHtml = QString(
+            "<table width='100%' style='margin: 10px 0; border-collapse: collapse;'>"
+            "<tr><td style='text-align: left; vertical-align: top;'>"
+            "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
+            "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+            "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
+            "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+            "text-align: left; display: inline-block; white-space: pre-wrap; "
+            "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+            "</div></td></tr></table>"
+        ).arg(displayName, timestamp, content.toHtmlEscaped());
 
-    QTextCursor cursor = chatDisplay->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    cursor.insertHtml(bubbleHtml);
-    chatDisplay->setTextCursor(cursor);
-    chatDisplay->ensureCursorVisible();
-
+        QTextCursor cursor = chatDisplay->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        cursor.insertHtml(bubbleHtml);
+        chatDisplay->setTextCursor(cursor);
+        chatDisplay->ensureCursorVisible();
+    }
     // 保存到数据库
     saveChatMessage("public", "PUBLIC", senderAccount, senderUsername, content, senderAccount == currentAccount);
 }
 
 //处理私聊消息
 void MainWindow::handlePrivateChatMessage(const QString& senderAccount, const QString& senderUsername, const QString& content, const QString& timestamp) {
-    QString displayName = (senderAccount == currentAccount) ? "我" : senderUsername;
+    if (currentChatType == "private" && currentChatTarget == senderAccount) {
+        QString displayName = (senderAccount == currentAccount) ? "我" : senderUsername;
+        // 使用与公共消息相同的左对齐气泡样式
+        QString bubbleHtml = QString(
+            "<table width='100%' style='margin: 10px 0; border-collapse: collapse;'>"
+            "<tr><td style='text-align: left; vertical-align: top;'>"
+            "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
+            "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+            "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
+            "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+            "text-align: left; display: inline-block; white-space: pre-wrap; "
+            "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+            "</div></td></tr></table>"
+        ).arg(displayName, timestamp, content.toHtmlEscaped());
 
-    // 使用与公共消息相同的左对齐气泡样式
-    QString bubbleHtml = QString(
-        "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
-        "<tr><td style='text-align: left; vertical-align: top;'>"
-        "<div style='display: inline-block; text-align: left; max-width: 60%;'>"
-        "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
-        "<div><span style='background-color: #F0F0F0; color: #333; border-radius: 18px; "
-        "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-        "text-align: left; display: inline-block; white-space: pre-wrap; "
-        "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
-        "</div></td></tr></table>"
-    ).arg(displayName, timestamp, content.toHtmlEscaped());
-
-    QTextCursor cursor = chatDisplay->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    cursor.insertHtml(bubbleHtml);
-    chatDisplay->setTextCursor(cursor);
-    chatDisplay->ensureCursorVisible();
-
+        QTextCursor cursor = chatDisplay->textCursor();
+        cursor.movePosition(QTextCursor::End);
+        cursor.insertHtml(bubbleHtml);
+        chatDisplay->setTextCursor(cursor);
+        chatDisplay->ensureCursorVisible();
+    }
     saveChatMessage("private", currentChatTarget, senderAccount, senderUsername, content, senderAccount == currentAccount);
 }
 
@@ -814,8 +1201,10 @@ void MainWindow::saveChatMessage(const QString& chatType, const QString& chatTar
     message.timestamp = QDateTime::currentDateTime();
     message.isSelf = isSelf;
 
-    if (!ChatDatabase::instance()->saveMessage(message)) {
-        qWarning() << "保存聊天消息失败";
+    // 使用数据库的防重复机制
+    bool saved = ChatDatabase::instance()->saveMessage(message);
+    if (!saved) {
+        qWarning() << "保存消息失败:" << content.left(20);
     }
 }
 
@@ -1030,6 +1419,7 @@ void MainWindow::onFriendListReceived(const QJsonObject& response) {
 
     if (response["status"].toString() == "success") {
         QJsonArray friends = response["friends"].toArray();
+        currentFriendListJsonArray = friends; // 保存到成员变量
         updateFriendListUI(friends);
         qDebug() << "好友列表更新成功，好友数量:" << friends.size();
     } else {
@@ -1058,7 +1448,7 @@ void MainWindow::onAiAnswerReceived(const QJsonObject& resp) {
 void MainWindow::updateFriendListUI(const QJsonArray& friends) {
     qDebug() << "开始更新好友列表UI，好友数量:" << friends.size();
 
-    // 先清除现有的好友列表项（保留公共聊天室）
+    // 先清除现有的好友列表项
     for (int i = userListWidget->count() - 1; i >= 1; i--) {
         QListWidgetItem* item = userListWidget->item(i);
         QString itemData = item->data(Qt::UserRole).toString();
@@ -1128,4 +1518,436 @@ void MainWindow::addFriendToList(const QJsonObject& friendObj, bool /*isOnline*/
     friendItem->setFont(friendFont);
 
     userListWidget->addItem(friendItem);
+}
+
+void MainWindow::restoreNormalWindowStyle() {
+    // 安全地处理阴影效果
+    if (!this->mainContainer->graphicsEffect()) {
+        // 只有在没有阴影效果时才重新创建
+        QGraphicsDropShadowEffect* newShadowEffect = new QGraphicsDropShadowEffect(this);
+        newShadowEffect->setBlurRadius(20);
+        newShadowEffect->setXOffset(0);
+        newShadowEffect->setYOffset(0);
+        newShadowEffect->setColor(QColor(0, 0, 0, 100));
+        this->mainContainer->setGraphicsEffect(newShadowEffect);
+        this->shadowEffect = newShadowEffect; // 更新引用
+    }
+
+    this->containerLayout->setContentsMargins(20, 20, 20, 20);
+    this->mainContainer->setStyleSheet(
+        "background-color: #6690A0;"
+        "border-radius: 18px;"
+    );
+
+    // 强制刷新
+    this->mainContainer->update();
+}
+
+void MainWindow::setMaximizedWindowStyle() {
+    // 安全地移除阴影效果
+    if (this->mainContainer->graphicsEffect()) {
+        this->mainContainer->setGraphicsEffect(nullptr);
+    }
+
+    this->containerLayout->setContentsMargins(0, 0, 0, 0);
+    this->mainContainer->setStyleSheet(
+        "background-color: #6690A0;"
+        "border-radius: 0px;"
+    );
+
+    // 强制刷新
+    this->mainContainer->update();
+}
+
+// 实现事件过滤器，处理聊天区域的鼠标光标
+bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    if (obj == chatDisplay) {
+        if (event->type() == QEvent::MouseMove) {
+            QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+
+            // 获取鼠标位置对应的文字光标
+            QTextCursor cursor = chatDisplay->cursorForPosition(mouseEvent->pos());
+
+            // 检查光标位置是否有文字内容
+            cursor.select(QTextCursor::WordUnderCursor);
+            QString selectedText = cursor.selectedText();
+
+            // 如果有文字内容，显示文本选择光标；否则显示箭头光标
+            if (!selectedText.trimmed().isEmpty()) {
+                chatDisplay->viewport()->setCursor(Qt::IBeamCursor);
+            } else {
+                chatDisplay->viewport()->setCursor(Qt::ArrowCursor);
+            }
+        }
+        else if (event->type() == QEvent::Leave) {
+            // 鼠标离开时恢复默认箭头光标
+            chatDisplay->viewport()->setCursor(Qt::ArrowCursor);
+        }
+    }
+
+    return QWidget::eventFilter(obj, event);
+}
+
+// 文件传输相关槽函数实现
+void MainWindow::handleFileTransferResponse(const QJsonObject& response) {
+    processFileTransfer(response);
+}
+
+void MainWindow::handleFileChunkReceived(const QByteArray& data) {
+    processFileChunk(data);
+}
+
+// 文件传输相关槽函数实现
+void MainWindow::onSendFileButtonClicked() {
+    QString filePath = QFileDialog::getOpenFileName(this,
+        "选择要发送的文件",
+        QString(),
+        "所有文件 (*.*)");
+
+    if (!filePath.isEmpty()) {
+        QFileInfo fileInfo(filePath);
+        qint64 fileSize = fileInfo.size();
+
+        // 检查文件大小限制（例如100MB）
+        const qint64 maxFileSize = 100 * 1024 * 1024; // 100MB
+        if (fileSize > maxFileSize) {
+            QMessageBox::warning(this, "文件过大",
+                QString("文件大小不能超过 %1 MB").arg(maxFileSize / 1024 / 1024));
+            return;
+        }
+
+        // 根据当前聊天类型发送文件
+        if (currentChatType == "public" || currentChatType == "private") {
+            sendFileTransfer(filePath, currentChatType, currentChatTarget);
+
+            // 在聊天区域显示文件发送信息
+            QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+            QString fileMessage = QString("📎 正在发送文件: %1 (%2)")
+                .arg(fileInfo.fileName())
+                .arg(formatFileSize(fileSize));
+
+            QString bubbleHtml = QString(
+                "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+                "<tr><td style='text-align: right; vertical-align: top;'>"
+                "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
+                "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+                "<div><span style='background-color: #1E90FF; color: white; border-radius: 18px; "
+                "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                "text-align: left; display: inline-block; white-space: pre-wrap; "
+                "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+                "</div></td></tr></table>"
+            ).arg(currentUsername, timestamp, fileMessage.toHtmlEscaped());
+
+            QTextCursor cursor = chatDisplay->textCursor();
+            cursor.movePosition(QTextCursor::End);
+            cursor.insertHtml(bubbleHtml);
+            chatDisplay->setTextCursor(cursor);
+            chatDisplay->ensureCursorVisible();
+        } else {
+            QMessageBox::information(this, "提示", "当前聊天类型不支持文件传输");
+        }
+    }
+}
+
+void MainWindow::onSendImageButtonClicked() {
+    QString filePath = QFileDialog::getOpenFileName(this,
+        "选择要发送的图片",
+        QString(),
+        "图片文件 (*.png *.jpg *.jpeg *.gif *.bmp)");
+
+    if (!filePath.isEmpty()) {
+        QFileInfo fileInfo(filePath);
+        qint64 fileSize = fileInfo.size();
+
+        // 检查图片文件大小限制（例如20MB）
+        const qint64 maxImageSize = 20 * 1024 * 1024; // 20MB
+        if (fileSize > maxImageSize) {
+            QMessageBox::warning(this, "图片过大",
+                QString("图片大小不能超过 %1 MB").arg(maxImageSize / 1024 / 1024));
+            return;
+        }
+
+        // 根据当前聊天类型发送图片
+        if (currentChatType == "public" || currentChatType == "private") {
+            sendFileTransfer(filePath, currentChatType, currentChatTarget);
+
+            // 在聊天区域显示图片发送信息
+            QString timestamp = QDateTime::currentDateTime().toString("hh:mm:ss");
+            QString imageMessage = QString("🖼️ 正在发送图片: %1 (%2)")
+                .arg(fileInfo.fileName())
+                .arg(formatFileSize(fileSize));
+
+            QString bubbleHtml = QString(
+                "<table width='100%' style='margin: 15px 0; border-collapse: collapse;'>"
+                "<tr><td style='text-align: right; vertical-align: top;'>"
+                "<div style='display: inline-block; text-align: right; max-width: 60%;'>"
+                "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
+                "<div><span style='background-color: #1E90FF; color: white; border-radius: 18px; "
+                "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
+                "text-align: left; display: inline-block; white-space: pre-wrap; "
+                "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
+                "</div></td></tr></table>"
+            ).arg(currentUsername, timestamp, imageMessage.toHtmlEscaped());
+
+            QTextCursor cursor = chatDisplay->textCursor();
+            cursor.movePosition(QTextCursor::End);
+            cursor.insertHtml(bubbleHtml);
+            chatDisplay->setTextCursor(cursor);
+            chatDisplay->ensureCursorVisible();
+        } else {
+            QMessageBox::information(this, "提示", "当前聊天类型不支持图片传输");
+        }
+    }
+}
+
+// 初始化下载目录
+void MainWindow::initializeDownloadDir() {
+    downloadDir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    if (downloadDir.isEmpty()) {
+        downloadDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    }
+
+    QDir dir(downloadDir);
+    if (!dir.exists()) {
+        dir.mkpath(downloadDir);
+    }
+
+    qDebug() << "文件下载目录初始化为:" << downloadDir;
+}
+
+// 发送文件传输
+void MainWindow::sendFileTransfer(const QString& filePath, const QString& chatType, const QString& chatTarget) {
+    QFile file(filePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qDebug() << "无法打开文件:" << filePath;
+        onFileTransferError("", "无法打开文件: " + filePath);
+        return;
+    }
+
+    QFileInfo fileInfo(filePath);
+    QString transferId = QUuid::createUuid().toString();
+
+    // 发送文件元数据
+    QJsonObject metadata;
+    metadata["type"] = "fileTransfer";
+    metadata["action"] = "start";
+    metadata["transferId"] = transferId;
+    metadata["fileName"] = fileInfo.fileName();
+    metadata["fileSize"] = file.size();
+    metadata["senderAccount"] = currentAccount;
+    metadata["senderUsername"] = currentUsername;
+    metadata["chatType"] = chatType;
+    metadata["chatTarget"] = chatTarget;
+
+    NetworkManager::instance()->sendMessage(metadata);
+
+    // 分块发送文件
+    const int chunkSize = 4096; // 4KB 块大小
+    QByteArray buffer;
+
+    while (!file.atEnd()) {
+        buffer = file.read(chunkSize);
+
+        // 构造文件数据包
+        QByteArray filePacket = "FILE_CHUNK:" + transferId.toUtf8() + ":" + buffer;
+        NetworkManager::instance()->sendRawData(filePacket);
+
+        // 可以在这里添加进度更新
+        QCoreApplication::processEvents();
+    }
+
+    // 发送文件传输完成信号
+    QJsonObject completion;
+    completion["type"] = "fileTransfer";
+    completion["action"] = "complete";
+    completion["transferId"] = transferId;
+
+    NetworkManager::instance()->sendMessage(completion);
+
+    file.close();
+    qDebug() << "文件发送完成:" << fileInfo.fileName();
+}
+
+// 处理文件块数据
+void MainWindow::processFileChunk(const QByteArray& data) {
+    // 解析文件数据包：FILE_CHUNK:transferId:data 或 FILE_DATA:transferId:data
+    QList<QByteArray> parts = data.split(':');
+    if (parts.size() < 3) {
+        qDebug() << "无效的文件数据包格式";
+        return;
+    }
+
+    QString transferId = QString::fromUtf8(parts[1]);
+    QByteArray fileData = data.mid(parts[0].size() + parts[1].size() + 2); // 跳过前缀transferId
+
+    if (!activeTransfers.contains(transferId)) {
+        qDebug() << "未知的传输ID:" << transferId;
+        return;
+    }
+
+    FileTransferInfo& transfer = activeTransfers[transferId];
+
+    if (transfer.file && transfer.file->write(fileData) == -1) {
+        // 发送错误反馈
+        sendFileTransferAck(transferId, "error", "写入文件失败");
+        onFileTransferError(transferId, "写入文件失败");
+        transfer.file->close();
+        delete transfer.file;
+        activeTransfers.remove(transferId);
+        return;
+    }
+
+    qint64 previousBytes = transfer.bytesReceived;
+    transfer.bytesReceived += fileData.size();
+
+    // 定期发送进度反馈（每接收100KB或传输完成时发送）
+    if ((transfer.bytesReceived / 102400) > (previousBytes / 102400) || transfer.bytesReceived >= transfer.fileSize) {
+        sendFileTransferProgress(transferId, transfer.bytesReceived, transfer.fileSize);
+    }
+
+    onFileTransferProgress(transferId, transfer.bytesReceived, transfer.fileSize);
+
+    // 检查是否传输完成
+    if (transfer.bytesReceived >= transfer.fileSize) {
+        transfer.file->close();
+        QString filePath = transfer.file->fileName();
+        delete transfer.file;
+        activeTransfers.remove(transferId);
+
+        // 发送完成确认
+        sendFileTransferAck(transferId, "completed", "文件传输完成");
+
+        onFileTransferCompleted(transferId, filePath);
+        qDebug() << "文件接收完成:" << filePath;
+    }
+}
+
+// 处理文件传输响应
+void MainWindow::processFileTransfer(const QJsonObject& response) {
+    QString action = response["action"].toString();
+
+    if (action == "start") {
+        QString transferId = response["transferId"].toString();
+        QString fileName = response["fileName"].toString();
+        qint64 fileSize = response["fileSize"].toInteger();
+        QString senderAccount = response["senderAccount"].toString();
+        QString senderUsername = response["senderUsername"].toString();
+        QString chatType = response["chatType"].toString();
+        QString chatTarget = response["chatTarget"].toString();
+
+        // 修正：确保下载目录存在，若不存在则创建
+        QDir dir(downloadDir);
+        if (!dir.exists()) {
+            if (!dir.mkpath(downloadDir)) {
+                QString errorDetail = QString("下载目录不存在且创建失败: %1").arg(downloadDir);
+                qWarning() << errorDetail;
+                sendFileTransferAck(transferId, "error", errorDetail);
+                onFileTransferError(transferId, errorDetail);
+                return;
+            }
+        }
+
+        // 创建接收文件
+        QString filePath = downloadDir + "/" + fileName;
+        QFile* file = new QFile(filePath);
+
+        // 新增：详细日志和错误原因输出
+        if (!file->open(QIODevice::WriteOnly)) {
+            QString errorDetail = file->errorString();
+            qWarning() << "无法创建文件:" << filePath << "错误:" << errorDetail;
+            sendFileTransferAck(transferId, "error", "无法创建文件: " + errorDetail);
+            onFileTransferError(transferId, "无法创建文件: " + errorDetail);
+            delete file;
+            return;
+        }
+
+        FileTransferInfo transfer;
+        transfer.transferId = transferId;
+        transfer.fileName = fileName;
+        transfer.fileSize = fileSize;
+        transfer.bytesReceived = 0;
+        transfer.senderAccount = senderAccount;
+        transfer.senderUsername = senderUsername;
+        transfer.chatType = chatType;
+        transfer.chatTarget = chatTarget;
+        transfer.file = file;
+        transfer.isComplete = false;
+
+        activeTransfers[transferId] = transfer;
+
+        // 发送接收确认
+        sendFileTransferAck(transferId, "received", "文件传输已开始");
+
+        onFileTransferStarted(transferId, fileName, fileSize, senderUsername);
+    }
+    else if (action == "complete") {
+        QString transferId = response["transferId"].toString();
+        qDebug() << "服务器确认文件传输完成:" << transferId;
+    }
+}
+
+// 发送文件传输确认
+void MainWindow::sendFileTransferAck(const QString& transferId, const QString& status, const QString& message) {
+    QJsonObject ack;
+    ack["type"] = "fileTransferAck";
+    ack["transferId"] = transferId;
+    ack["status"] = status; // "received", "completed", "error"
+    if (!message.isEmpty()) {
+        ack["message"] = message;
+    }
+    ack["timestamp"] = QDateTime::currentDateTime().toSecsSinceEpoch();
+
+    NetworkManager::instance()->sendMessage(ack);
+}
+
+// 发送文件传输进度
+void MainWindow::sendFileTransferProgress(const QString& transferId, qint64 bytesReceived, qint64 totalSize) {
+    QJsonObject progress;
+    progress["type"] = "fileTransferProgress";
+    progress["transferId"] = transferId;
+    progress["bytesReceived"] = bytesReceived;
+    progress["totalSize"] = totalSize;
+    progress["percentage"] = static_cast<int>((bytesReceived * 100) / totalSize);
+    progress["timestamp"] = QDateTime::currentDateTime().toSecsSinceEpoch();
+
+    NetworkManager::instance()->sendMessage(progress);
+}
+
+void MainWindow::onFileTransferError(const QString& transferId, const QString& errorMsg) {
+    // 可弹窗或日志，实际可自定义
+    qWarning() << "文件传输错误:" << transferId << errorMsg;
+    QMessageBox::warning(this, "文件传输错误", errorMsg);
+}
+
+void MainWindow::onFileTransferProgress(const QString& transferId, qint64 bytesReceived, qint64 totalSize) {
+    qDebug() << "文件传输进度:" << transferId << bytesReceived << "/" << totalSize;
+}
+
+void MainWindow::onFileTransferCompleted(const QString& transferId, const QString& filePath) {
+    // 文件接收完成后可弹窗或日志
+    qDebug() << "文件传输完成:" << transferId << filePath;
+    QMessageBox::information(this, "文件接收完成", QString("文件已保存到: %1").arg(filePath));
+}
+
+void MainWindow::onFileTransferStarted(const QString& transferId, const QString& fileName, qint64 fileSize, const QString& senderUsername) {
+    // 文件传输开始时可弹窗或日志
+    qDebug() << "文件传输开始:" << transferId << fileName << fileSize << senderUsername;
+}
+
+// static成员实现
+QString MainWindow::formatFileSize(qint64 bytes) {
+    if (bytes < 1024)
+        return QString::number(bytes) + " B";
+    else if (bytes < 1024 * 1024)
+        return QString::number(bytes / 1024.0, 'f', 2) + " KB";
+    else if (bytes < 1024 * 1024 * 1024)
+        return QString::number(bytes / (1024.0 * 1024), 'f', 2) + " MB";
+    else
+        return QString::number(bytes / (1024.0 * 1024 * 1024), 'f', 2) + " GB";
+}
+
+
+void MainWindow::handleUnknownMessage(const QJsonObject& obj) {
+    // 只在调试模式下输出收到的未知类型 JSON 内容到调试控制台
+    qDebug() << "[未知消息类型]" << QJsonDocument(obj).toJson(QJsonDocument::Indented);
 }

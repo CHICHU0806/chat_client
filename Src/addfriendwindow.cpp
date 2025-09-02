@@ -489,8 +489,8 @@ void AddFriendWindow::onSearchResponse(const QJsonObject &response) {
         // 显示搜索结果
         searchResultList->clear();
         QListWidgetItem *item = new QListWidgetItem();
-        QString displayText = QString("%1 (%2) %3")
-                .arg(username, account, isOnline ? "[在线]" : "[离线]");
+        QString displayText = QString("%1 %2 ")
+                .arg(username, account);
         item->setText(displayText);
         item->setForeground(QColor(0, 0, 0)); // 黑色字体
         item->setData(Qt::UserRole, QStringList() << account << username);
@@ -693,16 +693,14 @@ void AddFriendWindow::onFriendRequestListReceived(const QJsonObject& response) {
                 QString fromAccount = requestObj["fromAccount"].toString();
                 QString fromUsername = requestObj["fromUsername"].toString();
                 QString timestamp = requestObj["timestamp"].toString();
-                bool isOnline = requestObj["isOnline"].toBool();
 
                 QListWidgetItem *item = new QListWidgetItem();
 
                 // 格式化显示文本
                 QDateTime dt = QDateTime::fromString(timestamp, Qt::ISODate);
                 QString timeStr = dt.toString("MM-dd hh:mm");
-                QString onlineStatus = isOnline ? "[在线]" : "[离线]";
-                QString displayText = QString("%1 (%2) %3 [%4]")
-                    .arg(fromUsername, fromAccount, onlineStatus, timeStr);
+                QString displayText = QString("%1 (%2) %3 ")
+                    .arg(fromUsername, fromAccount, timeStr);
 
                 item->setText(displayText);
                 item->setData(Qt::UserRole, QStringList() << fromAccount << fromUsername << timestamp);

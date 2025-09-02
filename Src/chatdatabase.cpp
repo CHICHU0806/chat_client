@@ -25,19 +25,17 @@ QString ChatDatabase::getDatabasePath(const QString& account) {
 
 bool ChatDatabase::initDatabase(const QString& currentAccount) {
     m_currentAccount = currentAccount;
-    
-    // 为每个用户创建独立的数据库文件
+
     QString dbPath = getDatabasePath(currentAccount);
-    
+
     m_database = QSqlDatabase::addDatabase("QSQLITE", QString("chat_db_%1").arg(currentAccount));
     m_database.setDatabaseName(dbPath);
-    
+
     if (!m_database.open()) {
         qCritical() << "无法打开数据库:" << m_database.lastError().text();
         return false;
     }
-    
-    // 创建聊天记录表
+
     QSqlQuery query(m_database);
     QString createTableSql = R"(
         CREATE TABLE IF NOT EXISTS chat_messages (
@@ -52,16 +50,22 @@ bool ChatDatabase::initDatabase(const QString& currentAccount) {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     )";
-    
+
     if (!query.exec(createTableSql)) {
         qCritical() << "创建表失败:" << query.lastError().text();
         return false;
     }
-    
-    // 创建索引以提高查询性能
+
+    // 创建性能索引
     query.exec("CREATE INDEX IF NOT EXISTS idx_chat_target ON chat_messages(chat_type, chat_target, timestamp)");
     query.exec("CREATE INDEX IF NOT EXISTS idx_timestamp ON chat_messages(timestamp)");
-    
+
+    // 创建防重复的复合索引
+    query.exec(R"(
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_message
+        ON chat_messages(chat_type, chat_target, sender_account, content, timestamp)
+    )");
+
     qDebug() << "数据库初始化成功:" << dbPath;
     return true;
 }
@@ -71,27 +75,64 @@ bool ChatDatabase::saveMessage(const ChatMessage& message) {
         qWarning() << "数据库未打开";
         return false;
     }
-    
-    QSqlQuery query(m_database);
-    query.prepare(R"(
-        INSERT INTO chat_messages 
+
+    // 确保时间戳有效
+    QDateTime validTimestamp = message.timestamp;
+    if (!validTimestamp.isValid() || validTimestamp.isNull()) {
+        validTimestamp = QDateTime::currentDateTime();
+        qWarning() << "消息时间戳无效，使用当前时间:" << validTimestamp;
+    }
+
+    // 改进的重复检查逻辑 - 使用内容、发送者和时间范围检查
+    QSqlQuery checkQuery(m_database);
+    checkQuery.prepare(R"(
+        SELECT COUNT(*) FROM chat_messages
+        WHERE chat_type = ? AND chat_target = ? AND sender_account = ?
+        AND content = ? AND (
+            timestamp = ? OR
+            ABS(strftime('%s', timestamp) - strftime('%s', ?)) < 3
+        )
+    )");
+
+    checkQuery.addBindValue(message.chatType);
+    checkQuery.addBindValue(message.chatTarget);
+    checkQuery.addBindValue(message.senderAccount);
+    checkQuery.addBindValue(message.content);
+    checkQuery.addBindValue(validTimestamp.toString(Qt::ISODate));
+    checkQuery.addBindValue(validTimestamp.toString(Qt::ISODate));
+
+    if (checkQuery.exec() && checkQuery.next()) {
+        int count = checkQuery.value(0).toInt();
+        if (count > 0) {
+            qDebug() << "检测到重复消息，跳过保存:" << message.content.left(30);
+            return true; // 返回true表示处理成功（跳过重复）
+        }
+    } else {
+        qWarning() << "重复检查查询失败:" << checkQuery.lastError().text();
+    }
+
+    // 保存消息
+    QSqlQuery insertQuery(m_database);
+    insertQuery.prepare(R"(
+        INSERT INTO chat_messages
         (chat_type, chat_target, sender_account, sender_username, content, timestamp, is_self)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     )");
-    
-    query.addBindValue(message.chatType);
-    query.addBindValue(message.chatTarget);
-    query.addBindValue(message.senderAccount);
-    query.addBindValue(message.senderUsername);
-    query.addBindValue(message.content);
-    query.addBindValue(message.timestamp);
-    query.addBindValue(message.isSelf ? 1 : 0);
-    
-    if (!query.exec()) {
-        qWarning() << "保存消息失败:" << query.lastError().text();
+
+    insertQuery.addBindValue(message.chatType);
+    insertQuery.addBindValue(message.chatTarget);
+    insertQuery.addBindValue(message.senderAccount);
+    insertQuery.addBindValue(message.senderUsername);
+    insertQuery.addBindValue(message.content);
+    insertQuery.addBindValue(validTimestamp.toString(Qt::ISODate));
+    insertQuery.addBindValue(message.isSelf ? 1 : 0);
+
+    if (!insertQuery.exec()) {
+        qWarning() << "保存消息失败:" << insertQuery.lastError().text();
         return false;
     }
-    
+
+    qDebug() << "消息保存成功:" << message.content.left(30);
     return true;
 }
 
@@ -157,6 +198,19 @@ bool ChatDatabase::clearMessages(const QString& chatType, const QString& chatTar
     }
     
     return true;
+}
+
+bool ChatDatabase::messageExists(const QString& senderAccount, const QString& content, const QDateTime& timestamp) {
+    QSqlQuery query(m_database);
+    query.prepare("SELECT COUNT(*) FROM chat_messages WHERE sender_account = ? AND content = ? AND ABS(strftime('%s', timestamp) - strftime('%s', ?)) < 5");
+    query.addBindValue(senderAccount);
+    query.addBindValue(content);
+    query.addBindValue(timestamp.toString(Qt::ISODate));
+
+    if (query.exec() && query.next()) {
+        return query.value(0).toInt() > 0;
+    }
+    return false;
 }
 
 int ChatDatabase::getMessageCount(const QString& chatType, const QString& chatTarget) {

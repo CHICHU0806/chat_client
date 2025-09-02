@@ -32,6 +32,7 @@ public:
     QList<ChatMessage> getMessages(const QString& chatType, const QString& chatTarget, int limit, int offset = 0);
     QList<ChatMessage> getRecentMessages(const QString& chatType, const QString& chatTarget, int limit, int offset = 0);
     bool clearMessages(const QString& chatType, const QString& chatTarget = QString());
+    bool messageExists(const QString& senderAccount, const QString& content, const QDateTime& timestamp);
 
     //获取消息总数
     int getMessageCount(const QString& chatType, const QString& chatTarget);

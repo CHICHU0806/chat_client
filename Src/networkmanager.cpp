@@ -6,6 +6,7 @@
 #include <QDataStream>
 #include <QDebug>
 #include <QJsonObject>
+#include <QHostAddress>
 
 NetworkManager* NetworkManager::_instance = nullptr;
 
@@ -38,12 +39,18 @@ NetworkManager::NetworkManager(QObject* parent)
                 return;
             }
 
-            QByteArray jsonData;
-            in >> jsonData;
+            QByteArray data;
+            in >> data;
 
-            QJsonDocument doc = QJsonDocument::fromJson(jsonData);
-            if (!doc.isNull() && doc.isObject()) {
-                processResponse(doc.object());
+            // 检查是否为文件数据包
+            if (data.startsWith("FILE_CHUNK:") || data.startsWith("FILE_DATA:")) {
+                emit fileChunkReceived(data);
+            } else {
+                // 处理JSON消息
+                QJsonDocument doc = QJsonDocument::fromJson(data);
+                if (!doc.isNull() && doc.isObject()) {
+                    processResponse(doc.object());
+                }
             }
 
             m_blockSize = 0;
@@ -71,6 +78,21 @@ void NetworkManager::sendMessage(const QJsonObject& message) {
     mainTcpSocket->flush();
 }
 
+void NetworkManager::sendRawData(const QByteArray& data) {
+    QByteArray dataBlock;
+    QDataStream out(&dataBlock, QIODevice::WriteOnly);
+    out.setVersion(QDataStream::Qt_6_0);
+
+    out << (quint32)0;
+    out << data;
+
+    out.device()->seek(0);
+    out << (quint32)(dataBlock.size() - sizeof(quint32));
+
+    mainTcpSocket->write(dataBlock);
+    mainTcpSocket->flush();
+}
+
 void NetworkManager::processResponse(const QJsonObject& response) {
     QString type = response["type"].toString();
 
@@ -82,6 +104,9 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     }
     else if (type == "chatMessage") {
         emit chatMessageReceived(response);
+    }
+    else if (type == "fileTransfer") {
+        emit fileTransferResponse(response);  // 只转发，不处理
     }
     else if (type == "updateUserInfo") {
         emit userInfoUpdateResponse(response);
@@ -118,5 +143,6 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     }
     else {
         qDebug() << "未知消息类型：" << type;
+        emit unknownMessageReceived(response); // 新增：发出未知消息信号
     }
 }

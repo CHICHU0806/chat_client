@@ -123,7 +123,7 @@ void FriendListWindow::setupUI() {
 }
 
 void FriendListWindow::onRefreshButtonClicked() {
-    loadFriendList();
+    emit requestFriendList();
 }
 
 void FriendListWindow::onFriendItemClicked(QListWidgetItem* item) {
@@ -135,16 +135,34 @@ void FriendListWindow::onFriendItemClicked(QListWidgetItem* item) {
     }
 }
 
+void FriendListWindow::setFriendList(const QJsonArray& friends) {
+    friendListData = friends;
+    loadFriendList();
+}
+
 void FriendListWindow::loadFriendList() {
-    // 清空列表
     friendListWidget->clear();
     chatButton->setEnabled(false);
-    statusLabel->setText("暂无好友数据");
-
-    // TODO: 这里后续需要从服务器加载实际的好友列表
-    // 现在先显示一个占位符
-    QListWidgetItem* placeholderItem = new QListWidgetItem("暂无好友");
-    placeholderItem->setFlags(Qt::NoItemFlags); // 禁用选择
-    placeholderItem->setForeground(QColor("#999999"));
-    friendListWidget->addItem(placeholderItem);
+    if (friendListData.isEmpty()) {
+        statusLabel->setText("暂无好友数据");
+        QListWidgetItem* placeholderItem = new QListWidgetItem("暂无好友");
+        placeholderItem->setFlags(Qt::NoItemFlags);
+        placeholderItem->setForeground(QColor("#999999"));
+        friendListWidget->addItem(placeholderItem);
+        return;
+    }
+    statusLabel->setText("请选择一个好友进行聊天");
+    // 展示好友列表
+    for (const auto& friendValue : friendListData) {
+        QJsonObject friendObj = friendValue.toObject();
+        QString friendAccount = friendObj["account"].toString();
+        QString friendUsername = friendObj["username"].toString();
+        bool isOnline = friendObj["isOnline"].toBool();
+        QString displayText = friendUsername;
+        QListWidgetItem* item = new QListWidgetItem(displayText);
+        item->setData(Qt::UserRole, friendAccount);
+        item->setData(Qt::UserRole + 1, friendUsername);
+        item->setForeground(isOnline ? QColor("#1976D2") : QColor("#888888"));
+        friendListWidget->addItem(item);
+    }
 }
