@@ -745,6 +745,14 @@ void MainWindow::onFriendListButtonClicked() {
                     chatDisplay->clear();
                     loadChatHistory(currentChatType, currentChatTarget);
                     setWindowTitle(QString("聊天室 - %1 - 与 %2 的私聊").arg(currentUsername, friendUsername));
+                    // 选中左侧用户列表对应好友
+                    for (int i = 0; i < userListWidget->count(); ++i) {
+                        QListWidgetItem* item = userListWidget->item(i);
+                        if (item->data(Qt::UserRole).toString() == friendAccount) {
+                            userListWidget->setCurrentItem(item);
+                            break;
+                        }
+                    }
                 });
         connect(friendListWindow, &FriendListWindow::requestFriendList, this, &MainWindow::requestFriendList);
     } else {
@@ -837,8 +845,8 @@ void MainWindow::initializeUserList() {
         "}"
         "QListWidget::item:selected {"
         "    background-color: #009688;"      // 选中时的背景色（蓝色）
-        "    color: white;"                   // 选中时的文字颜色
-        "    border-color: #1976d2;"          // 选中时的边框色
+        "    color: white;"
+        "    border-color: #1976d2;"
         "}"
         "QListWidget::item:selected:hover {"
         "    background-color: #009688;"      // 选中且hover时的背景色（深蓝色）
@@ -905,16 +913,19 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
     else {
         // 切换到好友私聊
         QString friendUsername = item->data(Qt::UserRole + 1).toString();
-
         currentChatType = "private";
-        currentChatTarget = chatTarget; // 好友账号
+        currentChatTarget = item->data(Qt::UserRole).toString(); // 好友账号
         chatDisplay->clear();
         loadChatHistory(currentChatType, currentChatTarget);
-
         setWindowTitle(QString("聊天室 - %1 - 与 %2 的私聊")
                       .arg(currentUsername, friendUsername));
-
-        qDebug() << "切换到好友私聊:" << friendUsername << "(" << chatTarget << ")";
+        qDebug() << "切换到好友私聊:" << friendUsername << "(" << currentChatTarget << ")";
+        // 清除未读标记
+        int unread = item->data(Qt::UserRole + 2).toInt();
+        if (unread > 0) {
+            item->setData(Qt::UserRole + 2, 0);
+            item->setText(friendUsername);
+        }
     }
 
     // 聚焦输入框
@@ -1000,6 +1011,37 @@ void MainWindow::handleChatMessage(const QJsonObject &message) {
         qDebug() << "保存离线消息结果:" << saved << "内容:" << content.left(20);
 
         return; // 离线消息不立即显示，等待统一加载
+    }
+
+    // 新增：私聊未读消息提示
+    if (status == "private") {
+        // 如果当前不是与 sender 的私聊界面，则加未读标记
+        if (!(currentChatType == "private" && currentChatTarget == sender)) {
+            // 在用户列表找到对应好友项，加未读标记
+            for (int i = 0; i < userListWidget->count(); ++i) {
+                QListWidgetItem* item = userListWidget->item(i);
+                if (item->data(Qt::UserRole).toString() == sender) {
+                    // 用 UserRole+2 存未读数
+                    int unread = item->data(Qt::UserRole + 2).toInt();
+                    unread++;
+                    item->setData(Qt::UserRole + 2, unread);
+                    // 在文本前加红点或数字
+                    QString baseName = item->data(Qt::UserRole + 1).toString();
+                    if (unread > 0) {
+                        // 用黑色圆点（\u25CF）和数字，设置前景色为红色
+                        item->setText(QString("%1  \u25CF%2").arg(baseName).arg(unread)); // \u25CF 是黑色圆点
+                        item->setForeground(QBrush(QColor("#D32F2F")));
+                    } else {
+                        item->setText(baseName);
+                        item->setForeground(QBrush(Qt::black)); // 恢复默认颜色
+                    }
+                    break;
+                }
+            }
+            // 仍然保存到数据库
+            saveChatMessage("private", sender, sender, username, content, false);
+            return;
+        }
     }
 
     qDebug() << "准备显示其他人的消息";
@@ -1367,7 +1409,7 @@ void MainWindow::handleOfflinePublicMessageDirect(const QString& senderAccount,
     message.isSelf = false;
 
     if (!ChatDatabase::instance()->saveMessage(message)) {
-        qWarning() << "保存离线公共消息失败";
+        qWarning() << "保存离线消息失败";
     } else {
         qDebug() << "离线公共消息已保存:" << content;
     }
@@ -1510,6 +1552,7 @@ void MainWindow::addFriendToList(const QJsonObject& friendObj, bool /*isOnline*/
     QListWidgetItem* friendItem = new QListWidgetItem(displayText);
     friendItem->setData(Qt::UserRole, friendAccount);      // 存储好友账号
     friendItem->setData(Qt::UserRole + 1, friendUsername); // 存储好友用户名
+    friendItem->setData(Qt::UserRole + 2, 0); // 新增：未读数
 
     // 设置字体（不区分在线/离线）
     QFont friendFont;

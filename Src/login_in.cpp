@@ -16,87 +16,146 @@
 LoginWindow::LoginWindow(QWidget *parent)
     : QWidget(parent)
 {
-    setWindowTitle(" "); // 设置窗口标题
-    setFixedSize(290, 400); //禁用缩放
+    setFixedSize(290, 420);
+    setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
+    setAttribute(Qt::WA_TranslucentBackground);
 
-    setWindowFlags(Qt::Window | Qt::WindowCloseButtonHint); // 隐藏图标和最大化/最小化按钮，保留关闭按钮
+    // 主容器，用于圆角、阴影和背景色
+    QWidget *mainContainer = new QWidget(this);
+    mainContainer->setObjectName("mainContainer");
+    mainContainer->setStyleSheet(
+        "QWidget#mainContainer {"
+        "background-color: #222831;"
+        "border-radius: 18px;"
+        "border: 2px solid #3A5A6C;"
+        "}"
+    );
+    QGraphicsDropShadowEffect *shadowEffect = new QGraphicsDropShadowEffect(this);
+    shadowEffect->setBlurRadius(20);
+    shadowEffect->setXOffset(0);
+    shadowEffect->setYOffset(0);
+    shadowEffect->setColor(QColor(0, 0, 0, 100));
+    mainContainer->setGraphicsEffect(shadowEffect);
 
-    // --- 1. 创建并设置主布局 ---
-    QVBoxLayout *mainLayout = new QVBoxLayout(this);
+    // 主布局，顶部边距为0，mainContainer紧贴窗口顶部和左右
+    QVBoxLayout *containerLayout = new QVBoxLayout(this);
+    containerLayout->setContentsMargins(0, 0, 0, 0); // 四边无边距
+    containerLayout->setSpacing(0); // 保证无间隙
+    containerLayout->addWidget(mainContainer);
 
-    mainLayout->addStretch();
+    // mainContainer 内部布局
+    QVBoxLayout *mainLayout = new QVBoxLayout(mainContainer);
+    mainLayout->setContentsMargins(0, 0, 0, 0); // 让标题栏紧贴主容器
+    mainLayout->setSpacing(0);
 
-    // --- 2. 创建账号输入行 ---
+    // 标题栏始终在最上方
+    titleBar = new QWidget(mainContainer);
+    titleBar->setFixedHeight(36);
+    titleBar->setStyleSheet(
+        "background-color: #6690A0;"
+        "border-top-left-radius: 18px;"
+        "border-top-right-radius: 18px;"
+        "border-bottom-left-radius: 0px;"
+        "border-bottom-right-radius: 0px;"
+    );
+    QHBoxLayout *titleLayout = new QHBoxLayout(titleBar);
+    titleLayout->setContentsMargins(14, 0, 8, 0);
+    QLabel *iconLabel = new QLabel(titleBar);
+    iconLabel->setPixmap(QPixmap(":/icon.png").scaled(24, 24));
+    QLabel *titleLabel = new QLabel("登录", titleBar);
+    titleLabel->setStyleSheet("color: white; font-size: 16px; font-weight: bold;");
+    QPushButton *minBtn = new QPushButton("-", titleBar);
+    QPushButton *closeBtn = new QPushButton("×", titleBar);
+    minBtn->setFixedSize(28, 28);
+    closeBtn->setFixedSize(28, 28);
+    minBtn->setFocusPolicy(Qt::NoFocus);
+    closeBtn->setFocusPolicy(Qt::NoFocus);
+    minBtn->setStyleSheet(
+        "QPushButton { background: none; color: white; border-radius: 14px; outline: none; }"
+        "QPushButton:hover { background: #607D8B; }"
+        "QPushButton:pressed { background: #455A64; }"
+    );
+    closeBtn->setStyleSheet(
+        "QPushButton { background: none; color: white; border-radius: 14px; outline: none; }"
+        "QPushButton:hover { background: #E57373; }"
+        "QPushButton:pressed { background: #D32F2F; }"
+    );
+    titleLayout->addWidget(iconLabel);
+    titleLayout->addWidget(titleLabel);
+    titleLayout->addStretch();
+    titleLayout->addWidget(minBtn);
+    titleLayout->addWidget(closeBtn);
+    mainLayout->addWidget(titleBar);
+
+    // 顶部栏和输入区之间空隙
+    mainLayout->addSpacing(110);
+
+    // 输入区布局，留出左右边距
     QHBoxLayout *accountLayout = new QHBoxLayout();
-    accountLabel = new QLabel("账号:", this);
-    accountLineEdit = new QLineEdit(this);
+    accountLayout->setContentsMargins(20, 0, 20, 0); // 左右边距更大
+    accountLabel = new QLabel("账号:", mainContainer);
+    accountLineEdit = new QLineEdit(mainContainer);
     accountLineEdit->setPlaceholderText("请输入账号");
-    accountLineEdit->setStyleSheet("QLineEdit { "
-                                   "border-radius: 10px; "
-                                   "padding: 5px; border: "
-                                   "1px solid gray; "
-                                   "}");
+    accountLineEdit->setStyleSheet("QLineEdit { border-radius: 10px; padding: 5px; border: 1px solid gray; }");
     accountLayout->addWidget(accountLabel);
     accountLayout->addWidget(accountLineEdit);
     mainLayout->addLayout(accountLayout);
 
-    mainLayout->addSpacing(15);
+    // 账号输入和密码输入之间空隙
+    mainLayout->addSpacing(12);
 
-    // --- 3. 创建密码输入行 ---
     QHBoxLayout *passwordLayout = new QHBoxLayout();
-    passwordLabel = new QLabel("密码:", this);
-    passwordLineEdit = new QLineEdit(this);
+    passwordLayout->setContentsMargins(20, 0, 20, 0); // 左右边距更大
+    passwordLabel = new QLabel("密码:", mainContainer);
+    passwordLineEdit = new QLineEdit(mainContainer);
     passwordLineEdit->setPlaceholderText("请输入密码");
     passwordLineEdit->setEchoMode(QLineEdit::Password);
-    passwordLineEdit->setStyleSheet("QLineEdit { "
-                                    "border-radius: 10px; "
-                                    "padding: 5px; "
-                                    "border: 1px solid gray; "
-                                    "}");
+    passwordLineEdit->setStyleSheet("QLineEdit { border-radius: 10px; padding: 5px; border: 1px solid gray; }");
     passwordLayout->addWidget(passwordLabel);
     passwordLayout->addWidget(passwordLineEdit);
     mainLayout->addLayout(passwordLayout);
 
-    mainLayout->addSpacing(15);
+    // 密码输入和按钮之间空隙
+    mainLayout->addSpacing(18);
 
-    // --- 4. 创建登录和注册按钮 ---
-    loginButton = new QPushButton("登录", this); // 按钮文本改为“登录/连接”
-    loginButton->setStyleSheet("QPushButton {"
-                              "    border-radius: 10px;"
-                              "    background-color: #1E90FF;"
-                              "    color: white;"
-                              "    padding: 8px 20px;"
-                              "    border: none;"
-                              "}"
-                              "QPushButton:hover {"
-                              "    background-color: #4169E1;"
-                              "}"
-                              "QPushButton:pressed {"
-                              "    background-color: #0854AC;"
-                              "}");
-    mainLayout->addWidget(loginButton);
+    // 按钮区，按钮之间留出间距
+    QHBoxLayout *buttonLayout = new QHBoxLayout();
+    buttonLayout->setContentsMargins(20, 0, 20, 0); // 左右边距更大
+    loginButton = new QPushButton("登录", mainContainer);
+    loginButton->setStyleSheet("QPushButton { border-radius: 10px; background-color: #1E90FF; color: white; padding: 8px 20px; border: none; } QPushButton:hover { background-color: #4169E1; } QPushButton:pressed { background-color: #0854AC; }");
+    registerButton = new QPushButton("注册", mainContainer);
+    registerButton->setStyleSheet("QPushButton { border-radius: 10px; background-color: #1E90FF; color: white; padding: 8px 20px; border: none; } QPushButton:hover { background-color: #4169E1; } QPushButton:pressed { background-color: #0854AC; }");
+    buttonLayout->addWidget(loginButton);
+    buttonLayout->addSpacing(16); // 按钮之间间距
+    buttonLayout->addWidget(registerButton);
+    mainLayout->addLayout(buttonLayout);
 
-    registerButton = new QPushButton("注册", this); // 按钮文本改为“登录/连接”
-    registerButton->setStyleSheet("QPushButton {"
-                              "    border-radius: 10px;"
-                              "    background-color: #1E90FF;"
-                              "    color: white;"
-                              "    padding: 8px 20px;"
-                              "    border: none;"
-                              "}"
-                              "QPushButton:hover {"
-                              "    background-color: #4169E1;"
-                              "}"
-                              "QPushButton:pressed {"
-                              "    background-color: #0854AC;"
-                              "}");
-    mainLayout->addWidget(registerButton);
+    mainLayout->addStretch(); // 按钮下方留弹性空间
 
-    mainLayout->addStretch(); // 使布局更紧凑
+    meteors.clear();
+    int meteorCount = 8; // 光点数量
+    for (int i = 0; i < meteorCount; ++i) {
+        Meteor m;
+        resetMeteor(m);
+        meteors.append(m);
+    }
+    meteorTimer = new QTimer(this);
+    connect(meteorTimer, &QTimer::timeout, this, [this]{
+        for (auto &m : meteors) {
+            m.pos += m.vel;
+            if (m.pos.x() > width() || m.pos.y() > height()) {
+                resetMeteor(m);
+            }
+        }
+        update();
+    });
+    meteorTimer->start(16);
 
     // --- 5. 连接信号与槽 ---
     connect(loginButton, &QPushButton::clicked, this, &LoginWindow::onLoginButtonClicked);
     connect(registerButton, &QPushButton::clicked, this, &LoginWindow::onRegisterButtonClicked);
+    connect(minBtn, &QPushButton::clicked, this, &QWidget::showMinimized);
+    connect(closeBtn, &QPushButton::clicked, this, &QWidget::close);
 
     // 连接 NetworkManager 的信号
     auto* network = NetworkManager::instance();
@@ -108,8 +167,41 @@ LoginWindow::~LoginWindow() {
     qDebug() << "LoginWindow destroyed.";
 }
 
+void LoginWindow::mousePressEvent(QMouseEvent *event) {
+    if (event->button() == Qt::LeftButton && event->pos().y() <= titleBar->height()) {
+        dragging = true;
+        dragPosition = event->globalPosition().toPoint() - frameGeometry().topLeft();
+        event->accept();
+    }
+}
+void LoginWindow::mouseMoveEvent(QMouseEvent *event) {
+    if (dragging && (event->buttons() & Qt::LeftButton)) {
+        move(event->globalPosition().toPoint() - dragPosition);
+        event->accept();
+    }
+}
+void LoginWindow::mouseReleaseEvent(QMouseEvent *event) {
+    dragging = false;
+    event->accept();
+}
+
+void LoginWindow::paintEvent(QPaintEvent *event) {
+    QWidget::paintEvent(event);
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+    for (const auto &m : meteors) {
+        QPointF head = m.pos.toPointF() + QPointF(m.length, m.length * 0.8); // 头部（右下）
+        QPointF tail = m.pos.toPointF(); // 拖尾（左上）
+        QLinearGradient grad(tail, head);
+        grad.setColorAt(0.0, QColor(30,144,255,0));    // 拖尾透明
+        grad.setColorAt(0.7, QColor(30,144,255,180));  // 中间
+        grad.setColorAt(1.0, QColor(30,144,255,255));  // 头部更亮
+        painter.setPen(QPen(QBrush(grad), 4));
+        painter.drawLine(tail, head);
+    }
+}
+
 // ButtonClicked 槽函数的实现
-//-点击登录按钮后进行什么操作
 void LoginWindow::onLoginButtonClicked() {
     // 从输入框获取文本内容 (账号密码仍然需要)
     QString account = accountLineEdit->text();
@@ -204,4 +296,12 @@ void LoginWindow::handleLoginResponse(const QJsonObject& response) {
     } else {
         QMessageBox::warning(this, "登录失败", message);
     }
+}
+
+void LoginWindow::resetMeteor(Meteor &meteor) {
+    meteor.pos = QVector2D(QRandomGenerator::global()->bounded(width()/3), QRandomGenerator::global()->bounded(height()));
+    float speed = QRandomGenerator::global()->generateDouble() * (1.6f - 0.8f) + 0.8f; // 更慢
+    float angle = QRandomGenerator::global()->generateDouble() * (1.0f - 0.6f) + 0.6f; // 角度偏下
+    meteor.vel = QVector2D(speed, speed * angle);
+    meteor.length = QRandomGenerator::global()->generateDouble() * (60.0f - 40.0f) + 40.0f;;
 }

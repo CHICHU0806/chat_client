@@ -152,9 +152,16 @@ void FriendListWindow::loadFriendList() {
         return;
     }
     statusLabel->setText("请选择一个好友进行聊天");
-    // 展示好友列表
+    // 排序：按 username 字母顺序
+    QList<QJsonObject> sortedList;
     for (const auto& friendValue : friendListData) {
-        QJsonObject friendObj = friendValue.toObject();
+        sortedList.append(friendValue.toObject());
+    }
+    std::sort(sortedList.begin(), sortedList.end(), [](const QJsonObject& a, const QJsonObject& b) {
+        return a["username"].toString().toLower() < b["username"].toString().toLower();
+    });
+    // 展示排序后的好友列表
+    for (const auto& friendObj : sortedList) {
         QString friendAccount = friendObj["account"].toString();
         QString friendUsername = friendObj["username"].toString();
         bool isOnline = friendObj["isOnline"].toBool();

@@ -106,7 +106,7 @@ void NetworkManager::processResponse(const QJsonObject& response) {
         emit chatMessageReceived(response);
     }
     else if (type == "fileTransfer") {
-        emit fileTransferResponse(response);  // 只转发，不处理
+        emit fileTransferResponse(response);
     }
     else if (type == "updateUserInfo") {
         emit userInfoUpdateResponse(response);
@@ -143,6 +143,6 @@ void NetworkManager::processResponse(const QJsonObject& response) {
     }
     else {
         qDebug() << "未知消息类型：" << type;
-        emit unknownMessageReceived(response); // 新增：发出未知消息信号
+        emit unknownMessageReceived(response);
     }
 }
