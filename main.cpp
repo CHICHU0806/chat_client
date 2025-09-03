@@ -8,7 +8,7 @@
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv); // 创建应用程序对象
 
-    app.setWindowIcon(QIcon(":/icons/Icon/ icon.png")); // 设置图标
+    app.setWindowIcon(QIcon(":/icons/Icon/icon.png")); // 设置图标
 
     LoginWindow loginWindow; // 创建登录窗口的实例
     loginWindow.show();      // 显示登录窗口

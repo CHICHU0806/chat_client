@@ -224,7 +224,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     topBarLayout->addWidget(friendListButton);   // 添加好友列表按钮
 
     // 添加弹性空间和按钮
-    topBarLayout->addWidget(settingsButton);
+    // topBarLayout->addWidget(settingsButton);
 
     // 创建主分割器
     QSplitter *mainSplitter = new QSplitter(Qt::Horizontal, mainContainer);
@@ -443,11 +443,11 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "    background-color: #37474F;"
         "}"
     );
-    sendImageButton->setToolTip("发送图片");
+    // sendImageButton->setToolTip("发送图片");
 
-    toolLayout->addWidget(sendFileButton);
-    toolLayout->addWidget(sendImageButton);
-    toolLayout->addStretch(); // 左对齐
+    // toolLayout->addWidget(sendFileButton);
+    // toolLayout->addWidget(sendImageButton);
+    // toolLayout->addStretch(); // 左对齐
 
     // 创建输入区域
     QWidget *inputArea = new QWidget(centerWidget);
