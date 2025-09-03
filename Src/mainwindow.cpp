@@ -2,6 +2,9 @@
 // Created by 20852 on 25-7-22.
 //
 #include "mainwindow.h"
+
+#include <QApplication>
+
 #include "networkmanager.h"
 #include "personalmsgwindow.h"
 #include "FriendListWindow.h"
@@ -16,6 +19,8 @@
 #include <QMouseEvent>  // 添加鼠标事件头文件
 #include <QTextCharFormat>  // 添加文本格式头文件
 #include <QFileDialog> // 文件对话框
+#include <QScrollArea>
+#include "../Inc/messagebubble.h"
 
 // 构造函数
 MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString& account, QWidget *parent)
@@ -32,31 +37,31 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     setMinimumSize(1000, 750);        // 设置窗口最小大小
 
     // 创建主容器widget，用于应用阴影效果
-    QWidget *mainContainer = new QWidget(this);
-    mainContainer->setStyleSheet(
+    this->mainContainer = new QWidget(this);
+    this->mainContainer->setStyleSheet(
         "background-color: #6690A0;"
         "border-radius: 18px;"
     );
 
     // 创建阴影效果
-    QGraphicsDropShadowEffect *shadowEffect = new QGraphicsDropShadowEffect(this);
-    shadowEffect->setBlurRadius(20);           // 阴影模糊半径
-    shadowEffect->setXOffset(0);               // X轴偏移
-    shadowEffect->setYOffset(0);               // Y轴偏移
-    shadowEffect->setColor(QColor(0, 0, 0, 100)); // 阴影颜色和透明度
-    mainContainer->setGraphicsEffect(shadowEffect);
+    this->shadowEffect = new QGraphicsDropShadowEffect(this);
+    this->shadowEffect->setBlurRadius(20);           // 阴影模糊半径
+    this->shadowEffect->setXOffset(0);               // X轴偏移
+    this->shadowEffect->setYOffset(0);               // Y轴偏移
+    this->shadowEffect->setColor(QColor(0, 0, 0, 100)); // 阴影颜色和透明度
+    this->mainContainer->setGraphicsEffect(this->shadowEffect);
 
     // 保存阴影效果和主容器的引用，用于最大化时的处理
-    this->shadowEffect = shadowEffect;
-    this->mainContainer = mainContainer;
+    // this->shadowEffect = shadowEffect;
+    // this->mainContainer = mainContainer;
 
     // 创建主容器的布局
-    QVBoxLayout *containerLayout = new QVBoxLayout(this);
-    containerLayout->setContentsMargins(20, 20, 20, 20); // 为阴影留出空间
-    containerLayout->addWidget(mainContainer);
+    this->containerLayout = new QVBoxLayout(this);
+    this->containerLayout->setContentsMargins(20, 20, 20, 20); // 为阴影留出空间
+    this->containerLayout->addWidget(this->mainContainer);
 
     // 保存容器布局的引用
-    this->containerLayout = containerLayout;
+    // this->containerLayout = containerLayout;
 
     QWidget *titleBar = new QWidget(mainContainer);
     titleBar->setFixedHeight(36);
@@ -280,10 +285,9 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
 
     leftLayout->addWidget(userListWidget);
 
-    // 2. 中间聊天区域
+    // 2. 创建中间聊天区域
     QWidget *centerWidget = new QWidget(mainContainer);
-    centerWidget->setMinimumWidth(400);  // 添加这行：设置聊天区域最小宽度
-    // centerWidget 只设置下方圆角，保证底部圆角
+    centerWidget->setMinimumWidth(400);
     centerWidget->setStyleSheet(
         "background-color: #6690A0;"
         "border-top-left-radius: 0px;"
@@ -296,9 +300,52 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     centerLayout->setContentsMargins(0, 0, 0, 0);
     centerLayout->setSpacing(0);
 
+    // 聊天气泡区域（放到滚动区域里）
+    bubbleScrollArea = new QScrollArea(centerWidget); // 用成员变量保存
+    bubbleScrollArea->setWidgetResizable(true);
+    bubbleScrollArea->setFrameShape(QFrame::NoFrame);
+    bubbleScrollArea->setStyleSheet("background:transparent;");
+    // 美化滚动条样式
+    bubbleScrollArea->verticalScrollBar()->setStyleSheet(
+        "QScrollBar:vertical {"
+        "    background: #a0b4c0;" // 更深一点的灰蓝色作为轨道
+        "    width: 12px;"
+        "    margin: 0px 0px 0px 0px;"
+        "    border-radius: 6px;"
+        "}"
+        "QScrollBar::handle:vertical {"
+        "    background: #3A5A6C;" // 深色手柄
+        "    min-height: 30px;"
+        "    border-radius: 6px;"
+        "}"
+        "QScrollBar::handle:vertical:hover {"
+        "    background: #1E1E1E;" // hover更深
+        "}"
+        "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
+        "    background: none;"
+        "    height: 0px;"
+        "}"
+        "QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {"
+        "    background: none;"
+        "}"
+        "QScrollBar::up-arrow:vertical, QScrollBar::down-arrow:vertical {"
+        "    background: none;"
+        "    border: none;"
+        "}"
+    );
+
+    chatBubbleWidget = new QWidget();
+    chatBubbleLayout = new QVBoxLayout(chatBubbleWidget);
+    chatBubbleLayout->setContentsMargins(10, 10, 10, 10);
+    chatBubbleLayout->setSpacing(8);
+    chatBubbleWidget->setLayout(chatBubbleLayout);
+    chatBubbleWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    bubbleScrollArea->setWidget(chatBubbleWidget);
+    centerLayout->addWidget(bubbleScrollArea, 1);
+
+    // 隐藏原有 QTextEdit
     chatDisplay = new QTextEdit(centerWidget);
-    chatDisplay->setReadOnly(true);
-    chatDisplay->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    chatDisplay->hide();
     // 安装事件过滤器，实现QQ式的光标效果
     chatDisplay->installEventFilter(this);
     // 设置默认光标为箭头
@@ -310,18 +357,18 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "    padding: 10px;"
         "}"
         "QScrollBar:vertical {"
-        "    background: #e0e0e0;"
+        "    background: #a0b4c0;" // 更深一点的灰蓝色作为轨道
         "    width: 12px;"
         "    margin: 0px 0px 0px 0px;"
         "    border-radius: 6px;"
         "}"
         "QScrollBar::handle:vertical {"
-        "    background: #607D8B;"
+        "    background: #3A5A6C;" // 深色手柄
         "    min-height: 30px;"
         "    border-radius: 6px;"
         "}"
         "QScrollBar::handle:vertical:hover {"
-        "    background: #455A64;"
+        "    background: #1E1E1E;" // hover更深
         "}"
         "QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {"
         "    background: none;"
@@ -438,7 +485,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     inputLayout->addWidget(messageInput, 1);
     inputLayout->addWidget(sendButton);
 
-    centerLayout->addWidget(chatDisplay);
+    centerLayout->addWidget(bubbleScrollArea, 1);
     centerLayout->addWidget(toolBar);    // 添加工具栏
     centerLayout->addWidget(inputArea);
 
@@ -543,7 +590,13 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     initializeDownloadDir();
     isOfflineMessagesProcessed = false;
 
+    // 主动加载公共聊天室历史并滚动到底部
+    loadChatHistory("public", "PUBLIC");
+
     qDebug() << "MainWindow initialized with shared socket.";
+
+    // 修复：确保托盘图标始终创建
+    createTrayIcon();
 }
 
 // 析构函数
@@ -635,6 +688,7 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 void MainWindow::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
     messageInput->setFocus();  // 窗口显示时聚焦到输入框
+    if (trayIcon) trayIcon->hide();
 }
 
 void MainWindow::mouseDoubleClickEvent(QMouseEvent *event) {
@@ -678,6 +732,8 @@ void MainWindow::onSendButtonClicked() {
         // 移除多余的参数，直接调用
         sendMessageToServer(messageText);
         messageInput->clear();
+        // 使用定时器确保滚动条在布局刷新后定位到底部
+        QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
     } else {
         QMessageBox::critical(this, "网络错误", "未连接到服务器，无法发送消息！");
         messageInput->setEnabled(false);
@@ -892,9 +948,9 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
         currentChatTarget = "PUBLIC";
         chatDisplay->clear();
         loadChatHistory(currentChatType, currentChatTarget);
-
-        // 更新窗口标题
         setWindowTitle(QString("聊天室 - %1 - 公共聊天").arg(currentUsername));
+        // 切换后立即滚动到底部，保证显示最新消息
+        QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
     }
     else if (chatTarget == "AI") {
         // 切换到AI问答界面
@@ -904,6 +960,18 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
         loadChatHistory("ai", "AI"); // 加载AI历史
         setWindowTitle(QString("聊天室 - %1 - AI问答").arg(currentUsername));
         // AI 问答内容会通过 onAiAnswerReceived 显示在 chatDisplay
+        // 保证切换到AI窗口时滚动条也到底部
+        QTimer::singleShot(0, this, [this]() {
+            chatDisplay->verticalScrollBar()->setValue(chatDisplay->verticalScrollBar()->maximum());
+        });
+        // 新增：AI窗口也自动滚动气泡区域到底部（如果有气泡显示）
+        QTimer::singleShot(0, this, [this]() {
+            if (bubbleScrollArea) {
+                bubbleScrollArea->verticalScrollBar()->setValue(bubbleScrollArea->verticalScrollBar()->maximum());
+            }
+        });
+        // 切换后立即滚动到底部，保证显示最新消息
+        QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
         return;
     }
     else if (chatTarget == "SEPARATOR") {
@@ -926,6 +994,8 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
             item->setData(Qt::UserRole + 2, 0);
             item->setText(friendUsername);
         }
+        // 切换后立即滚动到底部，保证显示最新消息
+        QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
     }
 
     // 聚焦输入框
@@ -1066,11 +1136,9 @@ void MainWindow::handleChatMessage(const QJsonObject &message) {
         handlePrivateChatMessage(sender, username, content, displayTime);
     }
 
-    // 确保滚动到底部
-    QTextCursor cursor = chatDisplay->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    chatDisplay->setTextCursor(cursor);
-    chatDisplay->ensureCursorVisible();
+    // 重新加载气泡消息
+    loadChatHistory(currentChatType, currentChatTarget);
+    scrollToBottom();
 }
 
 // 这里简化，只发送消息内容。服务器应根据连接识别发送者。
@@ -1133,6 +1201,10 @@ void MainWindow::sendMessageToServer(const QString &msg) {
     // 清空输入框
     messageInput->clear();
     sendButton->setEnabled(false);
+
+    // 重新加载气泡消息
+    loadChatHistory(currentChatType, currentChatTarget);
+    scrollToBottom(); // 发送消息后自动滑动到底部
 }
 
 //处理公共聊天消息
@@ -1198,34 +1270,12 @@ void MainWindow::loadChatHistory(const QString& chatType, const QString& chatTar
     loadedMessageCount = 0;
     isLoadingHistory = false;
 
-    chatDisplay->clear();
-
-    int pageSize = 30; // 每页加载30条
-    int totalCount = ChatDatabase::instance()->getMessageCount(chatType, chatTarget);
-    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, pageSize);
-
+    // 清空气泡区域
+    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages(chatType, chatTarget, 30);
     loadedMessageCount = messages.size();
 
     qDebug() << "从本地数据库加载了" << messages.size() << "条历史记录";
-
-    if (messages.isEmpty()) {
-        qDebug() << "没有历史记录可显示";
-        return;
-    }
-
-    // 批量拼接HTML，一次性插入
-    QString html;
-    for (const auto& message : messages) {
-        html += formatMessage(message);
-    }
-    chatDisplay->insertHtml(html);
-
-    // 设置光标到末尾并滚动
-    QTextCursor cursor = chatDisplay->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    chatDisplay->setTextCursor(cursor);
-    chatDisplay->ensureCursorVisible();
-
+    displayMessages(messages);
     qDebug() << "聊天历史加载完成，共显示" << messages.size() << "条消息";
     qDebug() << "=== loadChatHistory 结束 ===";
 }
@@ -1252,57 +1302,50 @@ void MainWindow::saveChatMessage(const QString& chatType, const QString& chatTar
 
 // 检查是否有更多历史记录可加载
 void MainWindow::setupScrollBarConnection() {
-    QScrollBar* scrollBar = chatDisplay->verticalScrollBar();
-
-    connect(scrollBar, &QScrollBar::valueChanged, this, [this](int value) {
-        QScrollBar* bar = chatDisplay->verticalScrollBar();
-
+    // 监听气泡区域的滚动条
+    if (!bubbleScrollArea) return;
+    QScrollBar* scrollBar = bubbleScrollArea->verticalScrollBar();
+    connect(scrollBar, &QScrollBar::valueChanged, this, [this, scrollBar](int value) {
         // 检查是否滚动到顶部且不在加载状态
-        if (value == bar->minimum() && !isLoadingHistory && hasMoreHistory()) {
+        if (value == scrollBar->minimum() && !isLoadingHistory && hasMoreHistory()) {
             loadMoreHistory();
         }
     });
 }
 
-// 检查是否有更多历史记录
 void MainWindow::loadMoreHistory() {
     if (isLoadingHistory || !hasMoreHistory()) {
         return;
     }
-
     isLoadingHistory = true;
-
-    // 获取当前文档内容高度
-    QTextDocument* doc = chatDisplay->document();
-    qreal oldHeight = doc->size().height();
+    QScrollBar* scrollBar = bubbleScrollArea ? bubbleScrollArea->verticalScrollBar() : nullptr;
+    int oldMax = scrollBar ? scrollBar->maximum() : 0;
+    int oldValue = scrollBar ? scrollBar->value() : 0;
 
     // 获取更多历史消息，使用 offset 分页
     QList<ChatMessage> moreMessages = ChatDatabase::instance()->getRecentMessages(
         currentChatType, currentChatTarget, 20, loadedMessageCount
     );
-
     if (!moreMessages.isEmpty()) {
-        // 在文档开头插入新消息
-        QTextCursor cursor(doc);
-        cursor.movePosition(QTextCursor::Start);
-
-        QString historyContent;
+        int insertPos = 0;
         for (const auto& msg : moreMessages) {
-            historyContent += formatMessage(msg);
+            QString timeStr = msg.timestamp.toString("hh:mm:ss");
+            QString displayName = msg.isSelf ? "我" : msg.senderUsername;
+            MessageBubble* bubble = new MessageBubble(msg.content, displayName, timeStr, msg.isSelf, chatBubbleWidget);
+            chatBubbleLayout->insertWidget(insertPos++, bubble);
         }
-
-        cursor.insertHtml(historyContent);
-
-        // 更新加载计数
         loadedMessageCount += moreMessages.size();
 
-        // 恢复滚动位置 - 基于内容高度变化
-        qreal newHeight = doc->size().height();
-        qreal heightDiff = newHeight - oldHeight;
+        // 强制刷新布局，确保插入消息后滚动条最大值变化被立即计算
+        chatBubbleWidget->updateGeometry();
+        bubbleScrollArea->updateGeometry();
+        QApplication::processEvents();
 
-        QScrollBar* scrollBar = chatDisplay->verticalScrollBar();
-        int newPosition = scrollBar->value() + static_cast<int>(heightDiff);
-        scrollBar->setValue(newPosition);
+        // 恢复滚动位置，防止跳变（让原内容保持在原位置）
+        if (scrollBar) {
+            int newMax = scrollBar->maximum();
+            scrollBar->setValue(oldValue + (newMax - oldMax));
+        }
     }
 
     isLoadingHistory = false;
@@ -1349,20 +1392,31 @@ QString MainWindow::formatMessage(const ChatMessage& msg) {
 }
 
 void MainWindow::displayMessages(const QList<ChatMessage>& messages) {
-    for (const auto& msg : messages) {
-        QString formattedMsg = formatMessage(msg);
-        QTextCursor cursor = chatDisplay->textCursor();
-        cursor.movePosition(QTextCursor::End);
-        cursor.insertHtml(formattedMsg);
-        chatDisplay->setTextCursor(cursor);
+    // 清空气泡区域
+    QLayoutItem* item;
+    while ((item = chatBubbleLayout->takeAt(0)) != nullptr) {
+        if (item->widget()) item->widget()->deleteLater();
+        delete item;
     }
+    for (const auto& msg : messages) {
+        QString timeStr = msg.timestamp.toString("hh:mm:ss");
+        QString displayName = msg.isSelf ? "我" : msg.senderUsername;
+        MessageBubble* bubble = new MessageBubble(msg.content, displayName, timeStr, msg.isSelf, chatBubbleWidget);
+        chatBubbleLayout->addWidget(bubble);
+    }
+    chatBubbleLayout->addStretch();
+    // 强制刷新布局，确保滚动条状态更新
+    chatBubbleWidget->updateGeometry();
+    bubbleScrollArea->updateGeometry();
+    // 用稍长的定时器定位到底部，保证布局刷新后再滚动
+    QTimer::singleShot(30, this, [this]() { scrollToBottom(); });
 }
 
 void MainWindow::scrollToBottom() {
-    QTextCursor cursor = chatDisplay->textCursor();
-    cursor.movePosition(QTextCursor::End);
-    chatDisplay->setTextCursor(cursor);
-    chatDisplay->ensureCursorVisible();
+    // 气泡区域自动滚动到底部
+    if (bubbleScrollArea) {
+        bubbleScrollArea->verticalScrollBar()->setValue(bubbleScrollArea->verticalScrollBar()->maximum());
+    }
 }
 
 // 请求离线消息
@@ -1813,7 +1867,7 @@ void MainWindow::sendFileTransfer(const QString& filePath, const QString& chatTy
 
 // 处理文件块数据
 void MainWindow::processFileChunk(const QByteArray& data) {
-    // 解析文件数据包：FILE_CHUNK:transferId:data 或 FILE_DATA:transferId:data
+    // 解析文件数据包
     QList<QByteArray> parts = data.split(':');
     if (parts.size() < 3) {
         qDebug() << "无效的文件数据包格式";
@@ -1843,7 +1897,7 @@ void MainWindow::processFileChunk(const QByteArray& data) {
     qint64 previousBytes = transfer.bytesReceived;
     transfer.bytesReceived += fileData.size();
 
-    // 定期发送进度反馈（每接收100KB或传输完成时发送）
+    // 定期发送进度反馈
     if ((transfer.bytesReceived / 102400) > (previousBytes / 102400) || transfer.bytesReceived >= transfer.fileSize) {
         sendFileTransferProgress(transferId, transfer.bytesReceived, transfer.fileSize);
     }
@@ -1878,7 +1932,7 @@ void MainWindow::processFileTransfer(const QJsonObject& response) {
         QString chatType = response["chatType"].toString();
         QString chatTarget = response["chatTarget"].toString();
 
-        // 修正：确保下载目录存在，若不存在则创建
+        //确保下载目录存在，若不存在则创建
         QDir dir(downloadDir);
         if (!dir.exists()) {
             if (!dir.mkpath(downloadDir)) {
@@ -1894,7 +1948,7 @@ void MainWindow::processFileTransfer(const QJsonObject& response) {
         QString filePath = downloadDir + "/" + fileName;
         QFile* file = new QFile(filePath);
 
-        // 新增：详细日志和错误原因输出
+        //详细日志和错误原因输出
         if (!file->open(QIODevice::WriteOnly)) {
             QString errorDetail = file->errorString();
             qWarning() << "无法创建文件:" << filePath << "错误:" << errorDetail;
@@ -1934,7 +1988,7 @@ void MainWindow::sendFileTransferAck(const QString& transferId, const QString& s
     QJsonObject ack;
     ack["type"] = "fileTransferAck";
     ack["transferId"] = transferId;
-    ack["status"] = status; // "received", "completed", "error"
+    ack["status"] = status;
     if (!message.isEmpty()) {
         ack["message"] = message;
     }
@@ -1957,7 +2011,6 @@ void MainWindow::sendFileTransferProgress(const QString& transferId, qint64 byte
 }
 
 void MainWindow::onFileTransferError(const QString& transferId, const QString& errorMsg) {
-    // 可弹窗或日志，实际可自定义
     qWarning() << "文件传输错误:" << transferId << errorMsg;
     QMessageBox::warning(this, "文件传输错误", errorMsg);
 }
@@ -1967,30 +2020,70 @@ void MainWindow::onFileTransferProgress(const QString& transferId, qint64 bytesR
 }
 
 void MainWindow::onFileTransferCompleted(const QString& transferId, const QString& filePath) {
-    // 文件接收完成后可弹窗或日志
     qDebug() << "文件传输完成:" << transferId << filePath;
     QMessageBox::information(this, "文件接收完成", QString("文件已保存到: %1").arg(filePath));
 }
 
 void MainWindow::onFileTransferStarted(const QString& transferId, const QString& fileName, qint64 fileSize, const QString& senderUsername) {
-    // 文件传输开始时可弹窗或日志
     qDebug() << "文件传输开始:" << transferId << fileName << fileSize << senderUsername;
 }
 
 // static成员实现
 QString MainWindow::formatFileSize(qint64 bytes) {
-    if (bytes < 1024)
+    if (bytes < 1024) {
         return QString::number(bytes) + " B";
-    else if (bytes < 1024 * 1024)
+    }
+    if (bytes < 1024 * 1024) {
         return QString::number(bytes / 1024.0, 'f', 2) + " KB";
-    else if (bytes < 1024 * 1024 * 1024)
+    }
+    if (bytes < 1024 * 1024 * 1024) {
         return QString::number(bytes / (1024.0 * 1024), 'f', 2) + " MB";
-    else
-        return QString::number(bytes / (1024.0 * 1024 * 1024), 'f', 2) + " GB";
+    }
+    return QString::number(bytes / (1024.0 * 1024 * 1024), 'f', 2) + " GB";
 }
 
 
 void MainWindow::handleUnknownMessage(const QJsonObject& obj) {
-    // 只在调试模式下输出收到的未知类型 JSON 内容到调试控制台
     qDebug() << "[未知消息类型]" << QJsonDocument(obj).toJson(QJsonDocument::Indented);
 }
+
+void MainWindow::createTrayIcon() {
+    if (trayIcon) return;
+    QIcon trayIconImage(":/icons/Icon/icon.png");
+    if (trayIconImage.isNull()) {
+        qWarning() << "[托盘图标] 图标资源加载失败: :/icons/Icon/icon.png";
+        QMessageBox::warning(this, "托盘图标错误", "无法加载托盘图标资源 :/icons/Icon/icon.png\n请检查 resource.qrc 和 Icon/icon.png 是否存在。");
+        return;
+    }
+    trayIcon = new QSystemTrayIcon(trayIconImage, this);
+    trayMenu = new QMenu(this);
+    QAction *restoreAction = trayMenu->addAction("恢复窗口");
+    QAction *quitAction = trayMenu->addAction("退出");
+    connect(restoreAction, &QAction::triggered, this, [this]() {
+        this->showNormal();
+        this->activateWindow();
+        trayIcon->hide();
+    });
+    connect(quitAction, &QAction::triggered, qApp, &QApplication::quit);
+    trayIcon->setContextMenu(trayMenu);
+    connect(trayIcon, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
+        if (reason == QSystemTrayIcon::DoubleClick) {
+            this->showNormal();
+            this->activateWindow();
+            trayIcon->hide();
+        }
+    });
+    trayIcon->setToolTip("聊天室");
+    trayIcon->hide();
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event) {
+    if (event->key() == Qt::Key_Escape) {
+        this->hide();
+        if (trayIcon) trayIcon->show();
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+

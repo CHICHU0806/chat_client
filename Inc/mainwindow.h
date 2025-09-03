@@ -8,6 +8,7 @@
 
 #include "chatdatabase.h"
 #include "addfriendwindow.h"
+#include "messagebubble.h"
 #include <QWidget>
 #include <QLabel>      // 欢迎标签
 #include <QTextEdit>   // 用于显示聊天
@@ -31,6 +32,10 @@
 #include <QFileInfo>       // 文件信息
 #include <QUuid>           // UUID生成
 #include <QCoreApplication> // 事件处理
+#include <QScrollArea>     // 滚动区域
+#include <QSystemTrayIcon>
+#include <QMenu>
+#include <QKeyEvent>
 
 // 文件传输信息结构体
 struct FileTransferInfo {
@@ -69,6 +74,7 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     // 添加事件过滤器来处理聊天区域的鼠标光标
     bool eventFilter(QObject *obj, QEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
 private slots:
     // NetworkManager 相关的槽函数
@@ -207,6 +213,14 @@ private:
     //窗口相关方法
     void restoreNormalWindowStyle();
     void setMaximizedWindowStyle();
+
+    QVBoxLayout* chatBubbleLayout = nullptr; // 聊天气泡布局
+    QWidget* chatBubbleWidget = nullptr;     // 聊天气泡容器
+    QScrollArea* bubbleScrollArea = nullptr; // 新增：气泡滚动区域
+
+    QSystemTrayIcon *trayIcon = nullptr;
+    QMenu *trayMenu = nullptr;
+    void createTrayIcon();
 };
 
 #endif // MAINWINDOW_H
