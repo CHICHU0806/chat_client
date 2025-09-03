@@ -4,6 +4,9 @@
 #include "mainwindow.h"
 
 #include <QApplication>
+#include <QPainter>
+#include <QStandardPaths>
+#include <QPainterPath> // <-- 修复：补充头文件，解决 QPainterPath incomplete type 错误
 
 #include "networkmanager.h"
 #include "personalmsgwindow.h"
@@ -77,7 +80,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     QHBoxLayout *titleLayout = new QHBoxLayout(titleBar);
     titleLayout->setContentsMargins(10, 0, 0, 0);
 
-    QLabel *titleLabel = new QLabel("聊天室", titleBar);
+    QLabel *titleLabel = new QLabel("CHICHUの网络聊天室", titleBar);
     titleLabel->setStyleSheet("color: white; font-size: 15px;");
     titleLayout->addWidget(titleLabel);
 
@@ -136,19 +139,23 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "border-bottom: 1px solid #1E1E1E;"
     );
 
-    // 顶部状态栏的布局
     QHBoxLayout *topBarLayout = new QHBoxLayout(topBar);
     topBarLayout->setContentsMargins(10, 0, 10, 0);
 
-    // 创建个人消息按钮（圆形）
+    // 左上角圆形头像按钮（同时显示头像图片）
     personalMsgButton = new QPushButton(mainContainer);
-    personalMsgButton->setFixedSize(35, 35); // 设置为圆形大小
+    personalMsgButton->setFixedSize(35, 35);
     personalMsgButton->setStyleSheet(
         "QPushButton {"
         "    background-color: #FFFFFF;"
         "    border: 2px solid #CCCCCC;"
-        "    border-radius: 17px;" // 半径为宽度的一半，形成圆形
+        "    border-radius: 17px;"
         "    color: #666666;"
+        "    outline: none;" // 禁用虚线框
+        "}"
+        "QPushButton:focus {"
+        "    outline: none;"
+        "    border: 2px solid #CCCCCC;" // 保持正常边框
         "}"
         "QPushButton:hover {"
         "    background-color: #F0F0F0;"
@@ -158,28 +165,28 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "    background-color: #E0E0E0;"
         "}"
     );
+    topBarLayout->addWidget(personalMsgButton); // 头像按钮添加到左侧
+    topBarLayout->addStretch();
 
-    topBarLayout->addWidget(personalMsgButton); // 添加到左侧
-    topBarLayout->addStretch();  // 左侧弹性空间
 
     // 添加一些示例控件到顶部栏
-    QPushButton *settingsButton = new QPushButton("⚙", mainContainer);
-    settingsButton->setStyleSheet(
-        "QPushButton {"
-        "    background-color: transparent;"
-        "    color: #FFFFFF;"
-        "    border: none;"
-        "    padding: 5px 15px;"
-        "}"
-        "QPushButton:hover {"
-        "    background-color: #607D8B;"
-        "    border-radius: 4px;"  // hover 状态也需要添加圆角
-        "}"
-        "QPushButton:pressed {"
-        "    background-color: #455A64;"  // 更深的颜色
-        "    border-radius: 4px;"
-        "}"
-    );
+    // QPushButton *settingsButton = new QPushButton("⚙", mainContainer);
+    // settingsButton->setStyleSheet(
+    //     "QPushButton {"
+    //     "    background-color: transparent;"
+    //     "    color: #FFFFFF;"
+    //     "    border: none;"
+    //     "    padding: 5px 15px;"
+    //     "}"
+    //     "QPushButton:hover {"
+    //     "    background-color: #607D8B;"
+    //     "    border-radius: 4px;"  // hover 状态也需要添加圆角
+    //     "}"
+    //     "QPushButton:pressed {"
+    //     "    background-color: #455A64;"  // 更深的颜色
+    //     "    border-radius: 4px;"
+    //     "}"
+    // );
 
     // 创建添加好友按钮
     addFriendButton = new QPushButton("➕", mainContainer);
@@ -189,6 +196,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "    color: #FFFFFF;"
         "    border: none;"
         "    padding: 5px 15px;"
+        "    outline: none;"
         "}"
         "QPushButton:hover {"
         "    background-color: #607D8B;"
@@ -210,6 +218,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
         "    color: #FFFFFF;"
         "    border: none;"
         "    padding: 5px 15px;"
+        "    outline: none;"
         "}"
         "QPushButton:hover {"
         "    background-color: #607D8B;"
@@ -406,43 +415,43 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     toolLayout->setSpacing(10);
 
     // 发送文件按钮
-    QPushButton *sendFileButton = new QPushButton("📎", toolBar);
-    sendFileButton->setFixedSize(30, 30);
-    sendFileButton->setStyleSheet(
-        "QPushButton {"
-        "    background-color: #607D8B;"
-        "    color: white;"
-        "    border: none;"
-        "    border-radius: 15px;"
-        "    font-size: 16px;"
-        "}"
-        "QPushButton:hover {"
-        "    background-color: #455A64;"
-        "}"
-        "QPushButton:pressed {"
-        "    background-color: #37474F;"
-        "}"
-    );
-    sendFileButton->setToolTip("发送文件");
+    // QPushButton *sendFileButton = new QPushButton("📎", toolBar);
+    // sendFileButton->setFixedSize(30, 30);
+    // sendFileButton->setStyleSheet(
+    //     "QPushButton {"
+    //     "    background-color: #607D8B;"
+    //     "    color: white;"
+    //     "    border: none;"
+    //     "    border-radius: 15px;"
+    //     "    font-size: 16px;"
+    //     "}"
+    //     "QPushButton:hover {"
+    //     "    background-color: #455A64;"
+    //     "}"
+    //     "QPushButton:pressed {"
+    //     "    background-color: #37474F;"
+    //     "}"
+    // );
+    // sendFileButton->setToolTip("发送文件");
 
     // 发送图片按钮
-    QPushButton *sendImageButton = new QPushButton("🖼️", toolBar);
-    sendImageButton->setFixedSize(30, 30);
-    sendImageButton->setStyleSheet(
-        "QPushButton {"
-        "    background-color: #607D8B;"
-        "    color: white;"
-        "    border: none;"
-        "    border-radius: 15px;"
-        "    font-size: 16px;"
-        "}"
-        "QPushButton:hover {"
-        "    background-color: #455A64;"
-        "}"
-        "QPushButton:pressed {"
-        "    background-color: #37474F;"
-        "}"
-    );
+    //QPushButton *sendImageButton = new QPushButton("🖼️", toolBar);
+    // sendImageButton->setFixedSize(30, 30);
+    //sendImageButton->setStyleSheet(
+    //     "QPushButton {"
+    //     "    background-color: #607D8B;"
+    //     "    color: white;"
+    //     "    border: none;"
+    //     "    border-radius: 15px;"
+    //     "    font-size: 16px;"
+    //     "}"
+    //     "QPushButton:hover {"
+    //     "    background-color: #455A64;"
+    //     "}"
+    //     "QPushButton:pressed {"
+    //     "    background-color: #37474F;"
+    //     "}"
+    // );
     // sendImageButton->setToolTip("发送图片");
 
     // toolLayout->addWidget(sendFileButton);
@@ -539,7 +548,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     connect(messageInput, &QLineEdit::returnPressed, this, &MainWindow::onSendButtonClicked);
     // 连接用户列表点击事件
     connect(userListWidget, &QListWidget::itemClicked, this, &MainWindow::onUserListItemClicked);
-    // 新增：监听输入框内容变化，控制发送按钮状态
+    // 监听输入框内容变化，控制发送按钮状态
     connect(messageInput, &QLineEdit::textChanged, this, &MainWindow::onMessageInputChanged);
     //个人信息按钮
     connect(personalMsgButton, &QPushButton::clicked, this, &MainWindow::onPersonalMsgButtonClicked);
@@ -554,7 +563,7 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     // 初始化：
     friendListWindow = nullptr;
 
-    // 新增：设置发送按钮初始状态为禁用
+    // 设置发送按钮初始状态为禁用
     sendButton->setEnabled(false);
 
     // 初始化用户列表
@@ -576,8 +585,8 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
     //连接文件传输相关信号
     connect(network, &NetworkManager::fileTransferResponse, this, &MainWindow::handleFileTransferResponse);
     connect(network, &NetworkManager::fileChunkReceived, this, &MainWindow::handleFileChunkReceived);
-    connect(sendFileButton, &QPushButton::clicked, this, &MainWindow::onSendFileButtonClicked);
-    connect(sendImageButton, &QPushButton::clicked, this, &MainWindow::onSendImageButtonClicked);
+    //connect(sendFileButton, &QPushButton::clicked, this, &MainWindow::onSendFileButtonClicked);
+    // connect(sendImageButton, &QPushButton::clicked, this, &MainWindow::onSendImageButtonClicked);
 
     QTimer::singleShot(500, this, [this]() {
         requestFriendList();
@@ -597,6 +606,8 @@ MainWindow::MainWindow(QTcpSocket *socket,const QString& username,const QString&
 
     // 修复：确保托盘图标始终创建
     createTrayIcon();
+
+    QTimer::singleShot(0, this, [this]() { updateAvatarDisplay(); }); // 启动时刷新头像
 }
 
 // 析构函数
@@ -727,7 +738,14 @@ void MainWindow::onSendButtonClicked() {
     if (messageText.isEmpty()) {
         return; // 静默返回，不显示警告
     }
-
+    // AI问答“总结 账号”指令优先处理
+    if (currentChatType == "ai" && handleAiSummaryCommand(messageText)) {
+        // 如果是总结指令，已处理并发送，无需走原有逻辑
+        messageInput->clear();
+        sendButton->setEnabled(false);
+        QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
+        return;
+    }
     if (mainTcpSocket->state() == QAbstractSocket::ConnectedState) {
         // 移除多余的参数，直接调用
         sendMessageToServer(messageText);
@@ -754,6 +772,8 @@ void MainWindow::onPersonalMsgButtonClicked() {
         personalMsgWindow = new PersonalMsgWindow(currentUsername, currentAccount, this);
         // 连接用户信息更新信号
         connect(personalMsgWindow, &PersonalMsgWindow::userInfoUpdated,this, &MainWindow::onUserInfoUpdated);
+        // 监听头像变更信号，刷新主窗口头像
+        connect(personalMsgWindow, &PersonalMsgWindow::avatarChanged, this, &MainWindow::updateAvatarDisplay);
     }
 
     personalMsgWindow->show();
@@ -964,7 +984,7 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
         QTimer::singleShot(0, this, [this]() {
             chatDisplay->verticalScrollBar()->setValue(chatDisplay->verticalScrollBar()->maximum());
         });
-        // 新增：AI窗口也自动滚动气泡区域到底部（如果有气泡显示）
+        // AI窗口也自动滚动气泡区域到底部（如果有气泡显示）
         QTimer::singleShot(0, this, [this]() {
             if (bubbleScrollArea) {
                 bubbleScrollArea->verticalScrollBar()->setValue(bubbleScrollArea->verticalScrollBar()->maximum());
@@ -1083,7 +1103,7 @@ void MainWindow::handleChatMessage(const QJsonObject &message) {
         return; // 离线消息不立即显示，等待统一加载
     }
 
-    // 新增：私聊未读消息提示
+    // 私聊未读消息提示
     if (status == "private") {
         // 如果当前不是与 sender 的私聊界面，则加未读标记
         if (!(currentChatType == "private" && currentChatTarget == sender)) {
@@ -1207,7 +1227,45 @@ void MainWindow::sendMessageToServer(const QString &msg) {
     scrollToBottom(); // 发送消息后自动滑动到底部
 }
 
-//处理公共聊天消息
+// AI问答总结指令处理：检测并处理“总结 账号”指令
+bool MainWindow::handleAiSummaryCommand(const QString& input) {
+    // 只处理“总结 账号”格式指令
+    QString trimmed = input.trimmed();
+    QRegularExpression re("^总结\\s+(\\S+)$");
+    QRegularExpressionMatch match = re.match(trimmed);
+    if (!match.hasMatch()) return false;
+    QString targetAccount = match.captured(1);
+    // 获取与目标账号的私聊记录（最近20条）
+    QList<ChatMessage> messages = ChatDatabase::instance()->getRecentMessages("private", targetAccount, 20);
+    QString summaryContent;
+    for (const ChatMessage& msg : messages) {
+        QString who = msg.isSelf ? "我" : msg.senderUsername;
+        summaryContent += QString("[%1 %2] %3\n").arg(who, msg.timestamp.toString("hh:mm:ss"), msg.content);
+    }
+    if (summaryContent.isEmpty()) {
+        summaryContent = QString("暂无与账号 %1 的私聊记录可总结。").arg(targetAccount);
+    }
+    sendAiSummaryToServer(summaryContent);
+    return true;
+}
+
+// 实际发送总结内容到AI服务端
+void MainWindow::sendAiSummaryToServer(const QString& summaryContent) {
+    QJsonObject message;
+    message["type"] = "chatMessage";
+    message["chatType"] = "ai";
+    message["account"] = currentAccount;
+    message["username"] = currentUsername;
+    message["question"] = QString("请帮我总结以下聊天内容：\n%1").arg(summaryContent);
+    message["timestamp"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+    NetworkManager::instance()->sendMessage(message);
+    // 在本地显示请求内容
+    chatDisplay->append(QString("<span style='color:blue;'><b>总结请求：</b><br>%1</span>").arg(summaryContent.toHtmlEscaped()));
+    // 保存到数据库
+    saveChatMessage("ai", "AI", currentAccount, currentUsername, message["question"].toString(), true);
+}
+
+// 处理公共聊天消息
 void MainWindow::handlePublicChatMessage(const QString& senderAccount, const QString& senderUsername, const QString& content, const QString& timestamp) {
     if (currentChatType == "public") {
         QString displayName = (senderAccount == currentAccount) ? "我" : senderUsername;
@@ -1332,7 +1390,21 @@ void MainWindow::loadMoreHistory() {
             QString timeStr = msg.timestamp.toString("hh:mm:ss");
             QString displayName = msg.isSelf ? "我" : msg.senderUsername;
             MessageBubble* bubble = new MessageBubble(msg.content, displayName, timeStr, msg.isSelf, chatBubbleWidget);
-            chatBubbleLayout->insertWidget(insertPos++, bubble);
+
+            QWidget* bubbleRow = new QWidget(chatBubbleWidget);
+            QHBoxLayout* rowLayout = new QHBoxLayout(bubbleRow);
+            rowLayout->setContentsMargins(0, 0, 0, 0);
+            rowLayout->setSpacing(0);
+
+            if (msg.isSelf) {
+                rowLayout->addStretch();
+                rowLayout->addWidget(bubble, 0, Qt::AlignRight);
+            } else {
+                rowLayout->addWidget(bubble, 0, Qt::AlignLeft);
+                rowLayout->addStretch();
+            }
+
+            chatBubbleLayout->insertWidget(insertPos++, bubbleRow);
         }
         loadedMessageCount += moreMessages.size();
 
@@ -1402,13 +1474,25 @@ void MainWindow::displayMessages(const QList<ChatMessage>& messages) {
         QString timeStr = msg.timestamp.toString("hh:mm:ss");
         QString displayName = msg.isSelf ? "我" : msg.senderUsername;
         MessageBubble* bubble = new MessageBubble(msg.content, displayName, timeStr, msg.isSelf, chatBubbleWidget);
-        chatBubbleLayout->addWidget(bubble);
+
+        QWidget* bubbleRow = new QWidget(chatBubbleWidget);
+        QHBoxLayout* rowLayout = new QHBoxLayout(bubbleRow);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(0);
+
+        if (msg.isSelf) {
+            rowLayout->addStretch();
+            rowLayout->addWidget(bubble, 0, Qt::AlignRight);
+        } else {
+            rowLayout->addWidget(bubble, 0, Qt::AlignLeft);
+            rowLayout->addStretch();
+        }
+
+        chatBubbleLayout->addWidget(bubbleRow);
     }
     chatBubbleLayout->addStretch();
-    // 强制刷新布局，确保滚动条状态更新
     chatBubbleWidget->updateGeometry();
     bubbleScrollArea->updateGeometry();
-    // 用稍长的定时器定位到底部，保证布局刷新后再滚动
     QTimer::singleShot(30, this, [this]() { scrollToBottom(); });
 }
 
@@ -1534,9 +1618,19 @@ void MainWindow::onAiAnswerReceived(const QJsonObject& resp) {
 
         // 保存AI回复到数据库
         saveChatMessage("ai", "AI", "AI", "AI助手", answer, false);
+
+        if (currentChatType == "ai") {
+            loadChatHistory("ai", "AI");
+            scrollToBottom();
+        }
     } else {
         QString errorMsg = resp["message"].toString();
         chatDisplay->append(QString("<span style='color:red;'><b>AI服务错误：</b>%1</span>").arg(errorMsg));
+        // 错误也刷新气泡区域
+        if (currentChatType == "ai") {
+            loadChatHistory("ai", "AI");
+            scrollToBottom();
+        }
     }
 }
 
@@ -1606,7 +1700,7 @@ void MainWindow::addFriendToList(const QJsonObject& friendObj, bool /*isOnline*/
     QListWidgetItem* friendItem = new QListWidgetItem(displayText);
     friendItem->setData(Qt::UserRole, friendAccount);      // 存储好友账号
     friendItem->setData(Qt::UserRole + 1, friendUsername); // 存储好友用户名
-    friendItem->setData(Qt::UserRole + 2, 0); // 新增：未读数
+    friendItem->setData(Qt::UserRole + 2, 0); // 未读数
 
     // 设置字体（不区分在线/离线）
     QFont friendFont;
@@ -1654,6 +1748,12 @@ void MainWindow::setMaximizedWindowStyle() {
 
     // 强制刷新
     this->mainContainer->update();
+
+    //最大化时强制刷新气泡区域布局，防止气泡居中
+    if (chatBubbleLayout) {
+        chatBubbleWidget->updateGeometry();
+        bubbleScrollArea->updateGeometry();
+    }
 }
 
 // 实现事件过滤器，处理聊天区域的鼠标光标
@@ -1730,7 +1830,7 @@ void MainWindow::onSendFileButtonClicked() {
                 "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
                 "<div><span style='background-color: #1E90FF; color: white; border-radius: 18px; "
                 "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-                "text-align: left; display: inline-block; white-space: pre-wrap; "
+                "text-align: right; display: inline-block; white-space: pre-wrap; "
                 "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
                 "</div></td></tr></table>"
             ).arg(currentUsername, timestamp, fileMessage.toHtmlEscaped());
@@ -1781,7 +1881,7 @@ void MainWindow::onSendImageButtonClicked() {
                 "<div style='color: #666; font-size: 10px; margin-bottom: 3px;'>%1 %2</div>"
                 "<div><span style='background-color: #1E90FF; color: white; border-radius: 18px; "
                 "padding: 10px 16px; word-wrap: break-word; font-size: 14px; line-height: 1.4; "
-                "text-align: left; display: inline-block; white-space: pre-wrap; "
+                "text-align: right; display: inline-block; white-space: pre-wrap; "
                 "max-width: 100%; box-sizing: border-box;'>%3</span></div>"
                 "</div></td></tr></table>"
             ).arg(currentUsername, timestamp, imageMessage.toHtmlEscaped());
@@ -2087,3 +2187,31 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     QWidget::keyPressEvent(event);
 }
 
+// 刷新左上角圆形头像显示，解决链接错误。
+void MainWindow::updateAvatarDisplay() {
+    // 刷新左上角头像显示（按钮）
+    if (!personalMsgButton) return;
+    QString avatarPath = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        + QString("/avatar_%1.png").arg(currentAccount);
+    QPixmap avatarPixmap;
+    if (QFile::exists(avatarPath)) {
+        avatarPixmap.load(avatarPath);
+    }
+    if (!avatarPixmap.isNull()) {
+        // 裁剪为圆形
+        QPixmap rounded(personalMsgButton->size());
+        rounded.fill(Qt::transparent);
+        QPainter painter(&rounded);
+        painter.setRenderHint(QPainter::Antialiasing);
+        QPainterPath path;
+        path.addEllipse(rounded.rect());
+        painter.setClipPath(path);
+        painter.drawPixmap(0, 0, avatarPixmap.scaled(personalMsgButton->size(), Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation));
+        personalMsgButton->setIcon(QIcon(rounded));
+        personalMsgButton->setIconSize(personalMsgButton->size());
+        personalMsgButton->setText(""); // 清空文字
+    } else {
+        personalMsgButton->setIcon(QIcon());
+        personalMsgButton->setText("头像"); // 没有头像则显示文字
+    }
+}

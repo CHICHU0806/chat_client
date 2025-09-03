@@ -44,7 +44,7 @@ protected:
 
 private:
     QTcpSocket *mainTcpSocket;
-    quint32     m_blockSize; // **新增：用于存储当前数据包的预期总长度**
+    quint32     m_blockSize; // 用于存储当前数据包的预期总长度
 };
 
 #endif //REGISTERWINDOW_H

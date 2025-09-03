@@ -29,6 +29,7 @@ private slots:
 
 signals:
     void userInfoUpdated(const QString& newUsername, const QString& account);
+    void avatarChanged(const QString& account); // 头像变更信号
 
 private:
     void setupLeftWidget();

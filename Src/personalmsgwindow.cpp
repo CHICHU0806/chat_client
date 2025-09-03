@@ -1,10 +1,12 @@
 #include "personalmsgwindow.h"
-    #include "networkmanager.h"
-    #include <QJsonDocument>
-    #include <QJsonObject>
-    #include <QMessageBox>
-    #include <QFileDialog>
-    #include <QPixmap>
+#include "networkmanager.h"
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMessageBox>
+#include <QFileDialog>
+#include <QPixmap>
+#include <QStandardPaths>
+#include <QDir>
 
 PersonalMsgWindow::PersonalMsgWindow(const QString& username, const QString& account, QWidget *parent)
     : QDialog(parent),
@@ -312,6 +314,14 @@ void PersonalMsgWindow::setupUI() {
                 avatarButton->setIcon(QIcon(scaledPixmap));
                 avatarButton->setIconSize(QSize(116, 116));
                 avatarButton->setText("");
+
+                // 保存到固定目录
+                QString saveDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+                QDir().mkpath(saveDir); // 确保目录存在
+                QString savePath = saveDir + QString("/avatar_%1.png").arg(currentAccount);
+                if (scaledPixmap.save(savePath, "PNG")) {
+                    emit avatarChanged(currentAccount); // 通知主窗口刷新头像
+                }
             }
         }
     }

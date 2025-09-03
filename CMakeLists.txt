@@ -17,7 +17,7 @@ find_package(Qt6 COMPONENTS
         Sql
         REQUIRED)
 
-add_executable(chat_client main.cpp
+add_executable(chat_client WIN32 main.cpp
         Src/login_in.cpp
         Inc/login_in.h
         resource.qrc

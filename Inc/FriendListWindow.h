@@ -22,7 +22,7 @@ public:
     explicit FriendListWindow(const QString& currentAccount, QWidget *parent = nullptr);
     ~FriendListWindow();
 
-    // 新增：设置好友列表数据
+    // 设置好友列表数据
     void setFriendList(const QJsonArray& friends);
 
 private slots:

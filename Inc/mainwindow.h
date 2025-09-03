@@ -90,7 +90,7 @@ private slots:
     //用户个人信息处理
     void onUserInfoUpdated(const QString& newUsername, const QString& account);
 
-    void onAddFriendButtonClicked();     // 新增：添加好友按钮槽函数
+    void onAddFriendButtonClicked();     // 添加好友按钮槽函数
 
     void onFriendListButtonClicked();    // 好友列表按钮槽函数
 
@@ -111,10 +111,10 @@ private slots:
     void onFileTransferCompleted(const QString& transferId, const QString& filePath); // 文件传输完成
     void onFileTransferStarted(const QString& transferId, const QString& fileName, qint64 fileSize, const QString& senderUsername); // 文件传输开始
 
-    // 新增：处理NetworkManager转发的文件传输信号
+    // 处理NetworkManager转发的文件传输信号
     void handleFileTransferResponse(const QJsonObject& response);
     void handleFileChunkReceived(const QByteArray& data);
-    void handleUnknownMessage(const QJsonObject& obj); // 新增：处理未知消息槽函数
+    void handleUnknownMessage(const QJsonObject& obj); // 处理未知消息槽函数
 
 private:
     QPoint dragPosition;
@@ -139,7 +139,7 @@ private:
     QString currentAccount;   // 账号ID（数据库中的唯一标识）
 
     //顶部栏个人信息设置
-    QPushButton *personalMsgButton; // 添加按钮成员变量
+    QPushButton *personalMsgButton; // 圆形头像按钮（显示头像图片）
     PersonalMsgWindow *personalMsgWindow; // 添加窗口成员变量
 
     QPushButton *addFriendButton;       // 添加好友按钮
@@ -216,11 +216,17 @@ private:
 
     QVBoxLayout* chatBubbleLayout = nullptr; // 聊天气泡布局
     QWidget* chatBubbleWidget = nullptr;     // 聊天气泡容器
-    QScrollArea* bubbleScrollArea = nullptr; // 新增：气泡滚动区域
+    QScrollArea* bubbleScrollArea = nullptr; // 气泡滚动区域
 
     QSystemTrayIcon *trayIcon = nullptr;
     QMenu *trayMenu = nullptr;
     void createTrayIcon();
+
+    void updateAvatarDisplay(); // 刷新头像显示（按钮）
+
+    // AI问答总结指令处理
+    bool handleAiSummaryCommand(const QString& input);
+    void sendAiSummaryToServer(const QString& summaryContent);
 };
 
 #endif // MAINWINDOW_H

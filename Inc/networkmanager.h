@@ -13,7 +13,7 @@ class NetworkManager : public QObject {
 public:
     static NetworkManager* instance();
     void sendMessage(const QJsonObject& message);
-    void sendRawData(const QByteArray& data);  // 新增：发送原始数据的方法
+    void sendRawData(const QByteArray& data);  //发送原始数据的方法
     QTcpSocket* getSocket() { return mainTcpSocket; }
 
 signals:
@@ -34,7 +34,7 @@ signals:
     void aiAnswerReceived(const QJsonObject& response);
     void fileTransferResponse(const QJsonObject& response);
     void fileChunkReceived(const QByteArray& data);
-    void unknownMessageReceived(const QJsonObject& obj); // 新增：未知消息类型信号
+    void unknownMessageReceived(const QJsonObject& obj); // 未知消息类型信号
 
 private:
     explicit NetworkManager(QObject* parent = nullptr);
