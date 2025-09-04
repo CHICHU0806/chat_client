@@ -1013,6 +1013,7 @@ void MainWindow::onUserListItemClicked(QListWidgetItem* item) {
         if (unread > 0) {
             item->setData(Qt::UserRole + 2, 0);
             item->setText(friendUsername);
+            item->setForeground(QBrush(Qt::black));
         }
         // 切换后立即滚动到底部，保证显示最新消息
         QTimer::singleShot(0, this, [this]() { scrollToBottom(); });
